@@ -1,0 +1,361 @@
+import { useState, useEffect } from 'react';
+import { supabase } from './supabaseClient';
+import './index.css';
+
+function App() {
+  const [currentView, setCurrentView] = useState('Dashboard');
+
+  return (
+    <div className="flex h-screen bg-black text-slate-200 font-sans overflow-hidden">
+      {/* SIDEBAR */}
+      <aside className="w-72 bg-[#0b0f19] border-r border-slate-800 flex flex-col">
+        <div className="p-6">
+          <h1 className="text-2xl font-black text-cyan-400 tracking-tight">Starter Story LATAM</h1>
+        </div>
+        
+        <nav className="flex-1 overflow-y-auto px-4 py-2 space-y-6">
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Inicio</p>
+            <SidebarItem name="Dashboard" current={currentView} set={setCurrentView} icon="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Fase 1 — Scraping</p>
+            <SidebarItem name="Scraper & Logs" current={currentView} set={setCurrentView} icon="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+            <SidebarItem name="Videos" current={currentView} set={setCurrentView} icon="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Fase 3 — Clasificación</p>
+            <SidebarItem name="Pain Points LATAM" current={currentView} set={setCurrentView} icon="M13 10V3L4 14h7v8l9-11h-7z" />
+            <SidebarItem name="Wizard RPM" current={currentView} set={setCurrentView} icon="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Fase 4 — Soluciones</p>
+            <SidebarItem name="Motor de Soluciones" current={currentView} set={setCurrentView} icon="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Sistema</p>
+            <SidebarItem name="Ajustes" current={currentView} set={setCurrentView} icon="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          </div>
+        </nav>
+      </aside>
+
+      {/* MAIN CONTENT */}
+      <main className="flex-1 overflow-y-auto p-10 bg-black">
+        {currentView === 'Dashboard' && <DashboardView navigate={setCurrentView} />}
+        {currentView === 'Wizard RPM' && <WizardView />}
+        {currentView === 'Videos' && <VideosView />}
+        {currentView === 'Pain Points LATAM' && <PainPointsView />}
+        {currentView !== 'Dashboard' && currentView !== 'Wizard RPM' && currentView !== 'Videos' && currentView !== 'Pain Points LATAM' && (
+          <div className="flex items-center justify-center h-full text-slate-500">
+            Vista en construcción: {currentView}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function SidebarItem({ name, current, set, icon }) {
+  const active = current === name;
+  return (
+    <button
+      onClick={() => set(name)}
+      className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+        active ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-[0_0_10px_rgba(34,211,238,0.1)]' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+      }`}
+    >
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d={icon} />
+      </svg>
+      <span>{name}</span>
+    </button>
+  );
+}
+
+function DashboardView({ navigate }) {
+  const [stats, setStats] = useState({ videos: 0, analyzed: 0, painPoints: 0, logs: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchStats() {
+      const { count: vCount } = await supabase.from('videos').select('*', { count: 'exact', head: true });
+      const { count: aCount } = await supabase.from('videos').select('*', { count: 'exact', head: true }).not('business_model', 'is', null);
+      const { count: pCount } = await supabase.from('latam_pain_points').select('*', { count: 'exact', head: true });
+      const { count: lCount } = await supabase.from('scraper_logs').select('*', { count: 'exact', head: true });
+      
+      setStats({
+        videos: vCount || 0,
+        analyzed: aCount || 0,
+        painPoints: pCount || 0,
+        logs: lCount || 0
+      });
+      setLoading(false);
+    }
+    fetchStats();
+  }, []);
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-8">
+      <header className="flex justify-between items-end mb-10">
+        <div>
+          <h2 className="text-3xl font-bold text-white mb-2">Dashboard General</h2>
+          <p className="text-slate-400">Resumen del Motor de Inteligencia Starter Story</p>
+        </div>
+        <button 
+          onClick={() => navigate('Wizard RPM')}
+          className="bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-3 px-6 rounded-xl transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)] hover:shadow-[0_0_30px_rgba(34,211,238,0.5)] cursor-pointer"
+        >
+          Comenzar Flujo
+        </button>
+      </header>
+
+      {/* STAT CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard title="VIDEOS" value={loading ? '...' : stats.videos} subtitle="Extraídos de YouTube" icon="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        <StatCard title="ANALIZADOS" value={loading ? '...' : stats.analyzed} subtitle="Procesados por LLM" icon="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <StatCard title="PAIN POINTS" value={loading ? '...' : stats.painPoints} subtitle="Extrapolados a LATAM" icon="M13 10V3L4 14h7v8l9-11h-7z" />
+        <StatCard title="LOGS SISTEMA" value={loading ? '...' : stats.logs} subtitle="Ejecuciones registradas" icon="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ title, value, subtitle, icon }) {
+  return (
+    <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl p-6 flex flex-col relative overflow-hidden group">
+      <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl -mr-10 -mt-10 transition-all group-hover:bg-cyan-500/10"></div>
+      <div className="flex justify-between items-start mb-4">
+        <h3 className="text-slate-400 font-bold text-xs tracking-widest">{title}</h3>
+        <div className="p-2 bg-cyan-500/10 rounded-lg text-cyan-400">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
+            </svg>
+        </div>
+      </div>
+      <div className="mt-auto">
+        <span className="text-4xl font-black text-white">{value}</span>
+        <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
+      </div>
+    </div>
+  );
+}
+
+function VideosView() {
+  const [videos, setVideos] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchVideos() {
+      const { data } = await supabase.from('videos').select('*').order('created_at', { ascending: false });
+      if (data) setVideos(data);
+      setLoading(false);
+    }
+    fetchVideos();
+  }, []);
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-6 pb-12">
+      <header className="mb-8">
+        <h2 className="text-3xl font-bold text-white mb-2">Videos Extraídos</h2>
+        <p className="text-slate-400">Casos de estudio de Starter Story recolectados en la Fase 1</p>
+      </header>
+      
+      {loading ? (
+        <div className="text-cyan-400 text-center py-10 font-mono animate-pulse">Cargando base de datos...</div>
+      ) : (
+        <div className="bg-[#0b0f19] border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-300">
+              <thead className="bg-slate-900 border-b border-slate-800 text-slate-400 uppercase font-bold text-xs tracking-wider">
+                <tr>
+                  <th className="px-6 py-5">Video / Título</th>
+                  <th className="px-6 py-5">Acción Emprendedor (IA)</th>
+                  <th className="px-6 py-5">Modelo de Negocio (IA)</th>
+                  <th className="px-6 py-5">Ingresos (IA)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/50">
+                {videos.map(v => (
+                  <tr key={v.video_id} className="hover:bg-slate-800/50 transition-colors">
+                    <td className="px-6 py-4 font-medium text-white max-w-[250px] truncate" title={v.title}>
+                        <a href={v.url} target="_blank" rel="noreferrer" className="hover:text-cyan-400 transition-colors">{v.title}</a>
+                    </td>
+                    <td className="px-6 py-4 max-w-[250px] truncate text-slate-400" title={v.entrepreneur_action}>{v.entrepreneur_action || <span className="text-slate-600 italic">No procesado</span>}</td>
+                    <td className="px-6 py-4 text-cyan-400 font-medium">{v.business_model || <span className="text-slate-600 italic">No procesado</span>}</td>
+                    <td className="px-6 py-4 text-emerald-400 font-mono">{v.revenue || <span className="text-slate-600 italic">-</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {videos.length === 0 && <div className="p-8 text-center text-slate-500">No hay videos en la base de datos. Ejecuta el scraper.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PainPointsView() {
+  const [points, setPoints] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchPoints() {
+      const { data } = await supabase.from('latam_pain_points').select('*').order('severity_score', { ascending: false });
+      if (data) setPoints(data);
+      setLoading(false);
+    }
+    fetchPoints();
+  }, []);
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-6 pb-12">
+      <header className="mb-8">
+        <h2 className="text-3xl font-bold text-white mb-2">Pain Points LATAM</h2>
+        <p className="text-slate-400">Problemas de mercado extrapolados dinámicamente por la IA</p>
+      </header>
+      
+      {loading ? (
+        <div className="text-cyan-400 text-center py-10 font-mono animate-pulse">Consultando al motor RAG...</div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {points.map(p => (
+            <div key={p.pain_point_id} className="bg-[#0b0f19] border border-slate-800 rounded-xl p-6 hover:border-cyan-500/50 hover:shadow-[0_0_20px_rgba(6,182,212,0.15)] transition-all group">
+              <div className="flex justify-between items-start mb-4">
+                <span className="px-3 py-1 bg-slate-900 border border-slate-700 text-cyan-400 rounded-md text-xs font-bold uppercase tracking-wider shadow-inner">{p.category}</span>
+                <div className="flex items-center space-x-2 bg-black px-3 py-1 rounded-full border border-slate-800">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold">Severidad</span>
+                  <span className={`font-black text-sm ${p.severity_score >= 80 ? 'text-rose-500' : 'text-amber-500'}`}>{p.severity_score}/100</span>
+                </div>
+              </div>
+              <p className="text-slate-300 text-sm leading-relaxed mb-6">{p.description}</p>
+              <div className="pt-4 border-t border-slate-800/80">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Target Market</span>
+                <span className="text-sm text-slate-400">{p.target_market}</span>
+              </div>
+            </div>
+          ))}
+          {points.length === 0 && <div className="p-8 text-center text-slate-500 col-span-2">No se han extraído problemas aún. Ejecuta el Motor LLM.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WizardView() {
+  const [step, setStep] = useState(1);
+  const stepsData = [
+    { num: 1, letter: 'R', name: 'Results' },
+    { num: 2, letter: 'P', name: 'Purpose' },
+    { num: 3, letter: 'M', name: 'Massive Action' }
+  ];
+
+  const handleNext = () => {
+    if (step < 3) setStep(step + 1);
+  };
+
+  const handlePrev = () => {
+    if (step > 1) setStep(step - 1);
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto flex flex-col h-full pb-10">
+      <header className="mb-10 text-center">
+        <h2 className="text-3xl font-bold text-white mb-2">Perfil RPM</h2>
+        <p className="text-slate-400">Define tus Resultados, Propósito y Plan de Acción Masiva</p>
+      </header>
+
+      {/* WIZARD STEPS */}
+      <div className="flex justify-center items-center mb-12 relative w-full max-w-md mx-auto">
+        <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-800 -z-10 -translate-y-1/2 rounded"></div>
+        <div className="w-full flex justify-between">
+            {stepsData.map((s) => {
+                const isActive = step === s.num;
+                const isPast = step > s.num;
+                return (
+                    <div key={s.num} className="flex flex-col items-center">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg border-2 transition-all duration-300 ${
+                            isActive ? 'bg-cyan-500 border-cyan-400 text-black shadow-[0_0_20px_rgba(34,211,238,0.6)]' :
+                            isPast ? 'bg-[#0b0f19] border-cyan-500 text-cyan-400' :
+                            'bg-[#0b0f19] border-slate-700 text-slate-500'
+                        }`}>
+                            {s.letter}
+                        </div>
+                        <span className={`text-xs mt-3 font-semibold uppercase tracking-wider ${isActive ? 'text-cyan-400' : 'text-slate-500'}`}>
+                            {s.name}
+                        </span>
+                    </div>
+                )
+            })}
+        </div>
+      </div>
+
+      {/* FORM AREA */}
+      <div className="flex-1 bg-[#0b0f19] border border-slate-800 rounded-2xl p-8 shadow-2xl relative overflow-hidden flex flex-col min-h-[400px]">
+          {step === 1 && (
+              <div className="flex-1 flex flex-col animate-in fade-in slide-in-from-right-4 duration-500">
+                  <h3 className="text-2xl font-bold text-white mb-4">Paso 1: Results (Resultados)</h3>
+                  <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl mb-6 border-l-4 border-l-cyan-500">
+                      <p className="text-cyan-400 font-mono text-sm">[Insertar Texto de Ayuda Contextual aquí]</p>
+                      <p className="text-slate-400 text-sm mt-2">¿Qué resultado exacto y medible quieres lograr en tu mercado LATAM?</p>
+                  </div>
+                  <textarea 
+                    className="flex-1 w-full bg-black border border-slate-700 rounded-xl p-4 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all resize-none"
+                    placeholder="Ej: Lograr $10,000 USD de MRR vendiendo software a PyMEs..."
+                  ></textarea>
+              </div>
+          )}
+          
+          {step === 2 && (
+              <div className="flex-1 flex flex-col animate-in fade-in slide-in-from-right-4 duration-500">
+                  <h3 className="text-2xl font-bold text-white mb-4">Paso 2: Purpose (Propósito)</h3>
+                  <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl mb-6 border-l-4 border-l-cyan-500">
+                      <p className="text-cyan-400 font-mono text-sm">[Insertar Texto de Ayuda Contextual aquí]</p>
+                      <p className="text-slate-400 text-sm mt-2">¿Por qué este resultado es absolutamente necesario para ti?</p>
+                  </div>
+                  <textarea 
+                    className="flex-1 w-full bg-black border border-slate-700 rounded-xl p-4 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all resize-none"
+                    placeholder="Ej: Quiero libertad financiera para mi familia..."
+                  ></textarea>
+              </div>
+          )}
+
+          {step === 3 && (
+              <div className="flex-1 flex flex-col animate-in fade-in slide-in-from-right-4 duration-500">
+                  <h3 className="text-2xl font-bold text-white mb-4">Paso 3: Massive Action Plan</h3>
+                  <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl mb-6 border-l-4 border-l-cyan-500">
+                      <p className="text-cyan-400 font-mono text-sm">[Insertar Texto de Ayuda Contextual aquí]</p>
+                      <p className="text-slate-400 text-sm mt-2">¿Qué acciones masivas inmediatas vas a tomar hoy?</p>
+                  </div>
+                  <textarea 
+                    className="flex-1 w-full bg-black border border-slate-700 rounded-xl p-4 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all resize-none"
+                    placeholder="Ej: 1. Prospectar 50 empresas. 2. Construir landing page..."
+                  ></textarea>
+              </div>
+          )}
+
+          <div className="flex justify-between mt-8 pt-6 border-t border-slate-800">
+              <button 
+                onClick={handlePrev}
+                disabled={step === 1}
+                className={`px-6 py-3 rounded-xl font-bold transition-colors cursor-pointer ${step === 1 ? 'text-slate-700 cursor-not-allowed' : 'text-cyan-400 hover:bg-slate-800'}`}
+              >
+                  Anterior
+              </button>
+              <button 
+                onClick={handleNext}
+                className="bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-3 px-8 rounded-xl transition-all shadow-[0_0_15px_rgba(34,211,238,0.2)] hover:shadow-[0_0_25px_rgba(34,211,238,0.4)] cursor-pointer"
+              >
+                  {step === 3 ? 'Generar Soluciones' : 'Siguiente Paso'}
+              </button>
+          </div>
+      </div>
+    </div>
+  );
+}
+
+export default App;

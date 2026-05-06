@@ -1,10 +1,10 @@
 ## Sprint 0: Configuración y Arquitectura (Semana 1)
 ### El objetivo aquí es dejar el terreno listo y las decisiones técnicas tomadas (tus tareas actuales van aquí).
 
-- [ ] Crear repo GitHub privado e invitar al instructor (Prioridad: Alta)
+- [x] Crear repo GitHub privado e invitar al instructor (Prioridad: Alta)
 - [ ] Elegir herramienta (Antigravity o Kiro) y justificar en README (Prioridad: Alta)
 - [ ] Clonar proyecto Asana/Freedmap desde plantilla y compartir (Prioridad: Media)
-- [ ] Bosquejo de arquitectura de los 5 módulos en /docs/ (Prioridad: Alta)
+- [x] Bosquejo de arquitectura de los 5 módulos en /docs/ (Prioridad: Alta)
 - [x] Decisión de motor de base de datos (PostgreSQL, Supabase, etc.) (Prioridad: Alta)
 - [x] Estrategia de extracción YouTube (API v3 vs Transcript scraper) (Prioridad: Alta)
 - [ ] Elegir target de deployment (Vercel, Railway, Fly.io) (Prioridad: Media)
@@ -15,20 +15,20 @@
 ## Sprint 1: Scraper y Memoria (Fase 1 y 2)
 ### Aquí construimos el motor de extracción y la persistencia de datos.
 
-- [ ] Escribir script de extracción de metadata y transcripciones (Prioridad: Alta)
-- [ ] Implementar lógica de scraping incremental (solo lo nuevo) (Prioridad: Alta)
-- [ ] Configurar el schedule (cron job) para ejecución en background (Prioridad: Alta)
-- [ ] Crear tablas/colecciones según el JSON Data Schema (Prioridad: Alta)
-- [ ] Implementar registro de logs del scraper con timestamps (Prioridad: Alta)
-- [ ] Ejecutar scraper y poblar base de datos con mínimo 30 videos (Prioridad: Alta)
+- [x] Escribir script de extracción de metadata y transcripciones (Prioridad: Alta)
+- [x] Implementar lógica de scraping incremental (solo lo nuevo) (Prioridad: Alta)
+- [x] Configurar el schedule (cron job) para ejecución en background (Prioridad: Alta)
+- [x] Crear tablas/colecciones según el JSON Data Schema (Prioridad: Alta)
+- [x] Implementar registro de logs del scraper con timestamps (Prioridad: Alta)
+- [x] Ejecutar scraper y poblar base de datos con mínimo 30 videos (Prioridad: Alta)
 
 ## Sprint 2: El Cerebro y el Usuario (Fase 3)
 ### Dotamos de inteligencia a la app y construimos la interfaz del usuario.
 
-- [ ] Ingresar los 8 pain points LATAM investigados a la base de datos (Prioridad: Alta)
-- [ ] Crear prompt de IA para clasificar videos según los pain points (Prioridad: Alta)
-- [ ] Implementar función que re-clasifique si se editan los pain points (Prioridad: Alta)
-- [ ] Crear UI del flujo paso a paso (Questions R, P y M separadas) (Prioridad: Media)
+- [x] Ingresar los 8 pain points LATAM investigados a la base de datos (Prioridad: Alta) *[Cancelado/Sustituido: Se generarán dinámicamente vía IA en el siguiente paso]*
+- [x] Crear prompt de IA para clasificar videos según los pain points (Prioridad: Alta)
+- [x] Implementar función que re-clasifique si se editan los pain points (Prioridad: Alta) *[Dinámico integrado]*
+- [x] Crear UI del flujo paso a paso (Questions R, P y M separadas) (Prioridad: Media)
 - [ ] Agregar textos de ayuda contextual y profundización progresiva en UI (Prioridad: Media)
 - [ ] Conectar LLM para procesar las respuestas y generar el resumen estructurado (Prioridad: Alta)
 
