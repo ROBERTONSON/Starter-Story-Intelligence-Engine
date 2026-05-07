@@ -29,8 +29,8 @@
 - [x] Crear prompt de IA para clasificar videos según los pain points (Prioridad: Alta)
 - [x] Implementar función que re-clasifique si se editan los pain points (Prioridad: Alta) *[Dinámico integrado]*
 - [x] Crear UI del flujo paso a paso (Questions R, P y M separadas) (Prioridad: Media)
-- [ ] Agregar textos de ayuda contextual y profundización progresiva en UI (Prioridad: Media)
-- [ ] Conectar LLM para procesar las respuestas y generar el resumen estructurado (Prioridad: Alta)
+- [x] Agregar textos de ayuda contextual y profundización progresiva en UI (Prioridad: Media)
+- [x] Conectar LLM para procesar las respuestas y generar el resumen estructurado (Prioridad: Alta)
 
 ## Sprint 3: El Motor de Valor (Fase 4)
 ### Donde ocurre la magia: cruzar RPM + Pain Points + Videos.

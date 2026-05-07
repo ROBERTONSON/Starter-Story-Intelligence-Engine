@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import './index.css';
 
 function App() {
@@ -248,6 +249,10 @@ function PainPointsView() {
 
 function WizardView() {
   const [step, setStep] = useState(1);
+  const [rpm, setRpm] = useState({ results: '', purpose: '', massiveAction: '' });
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [llmSummary, setLlmSummary] = useState(null);
+
   const stepsData = [
     { num: 1, letter: 'R', name: 'Results' },
     { num: 2, letter: 'P', name: 'Purpose' },
@@ -261,6 +266,99 @@ function WizardView() {
   const handlePrev = () => {
     if (step > 1) setStep(step - 1);
   };
+
+  const handleGenerate = async () => {
+    setIsProcessing(true);
+    try {
+      // Initialize Gemini Client
+      const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+      const prompt = `
+        Eres un analista experto de modelos de negocio. El usuario acaba de completar su perfil RPM (Results, Purpose, Massive Action).
+        Toma su perfil y genera un breve análisis estructurado en formato JSON estrictamente (sin formato markdown adicional).
+        
+        Resultados deseados: ${rpm.results}
+        Propósito: ${rpm.purpose}
+        Plan de Acción: ${rpm.massiveAction}
+
+        Devuelve un JSON con:
+        {
+          "archetype": "Un arquetipo de emprendedor que lo defina en 3 palabras (ej. 'Agresivo B2B Hacker')",
+          "viability_score": un número del 1 al 100 evaluando qué tan realista es su plan,
+          "critical_feedback": "Un párrafo muy crítico y directo sobre el eslabón más débil de su plan y cómo arreglarlo",
+          "extracted_keywords": ["keyword1", "keyword2", "keyword3"]
+        }
+      `;
+
+      const result = await model.generateContent(prompt);
+      let text = result.response.text().trim();
+      
+      // Clean markdown if present
+      if (text.startsWith("```json")) text = text.slice(7);
+      if (text.endsWith("```")) text = text.slice(0, -3);
+      
+      const parsedSummary = JSON.parse(text.trim());
+      setLlmSummary(parsedSummary);
+
+      // Save to Supabase (Mock user_id as 'dev_user')
+      await supabase.from('users_rpm').upsert({
+        user_id: 'dev_user',
+        results_desired: [rpm.results],
+        purpose: [rpm.purpose],
+        massive_action_plan: [rpm.massiveAction],
+        updated_at: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error("Error processing LLM or saving DB:", error);
+      alert("Hubo un error al procesar tu RPM con Gemini. Revisa la consola.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  if (llmSummary) {
+    return (
+      <div className="max-w-4xl mx-auto flex flex-col h-full pb-10 animate-in fade-in zoom-in duration-500">
+        <header className="mb-10 text-center">
+          <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 mb-2">Evaluación RAG Completada</h2>
+          <p className="text-slate-400">Tu perfil ha sido analizado por el motor de inteligencia.</p>
+        </header>
+
+        <div className="bg-[#0b0f19] border border-cyan-500/50 rounded-2xl p-8 shadow-[0_0_40px_rgba(34,211,238,0.15)] relative overflow-hidden flex flex-col">
+          <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-6">
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1">Arquetipo Asignado</p>
+              <h3 className="text-2xl font-black text-white">{llmSummary.archetype}</h3>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1">Viabilidad</p>
+              <div className="text-4xl font-black text-cyan-400">{llmSummary.viability_score}/100</div>
+            </div>
+          </div>
+          
+          <div className="mb-6">
+            <h4 className="text-sm text-cyan-500 font-bold uppercase mb-2">Feedback Crítico de la IA</h4>
+            <p className="text-slate-300 leading-relaxed bg-black/50 p-4 rounded-xl border border-slate-800">{llmSummary.critical_feedback}</p>
+          </div>
+
+          <div>
+            <h4 className="text-sm text-cyan-500 font-bold uppercase mb-2">Vectores Semánticos (Keywords)</h4>
+            <div className="flex flex-wrap gap-2">
+              {llmSummary.extracted_keywords.map(kw => (
+                <span key={kw} className="px-3 py-1 bg-slate-800 text-slate-300 rounded-lg text-sm border border-slate-700">{kw}</span>
+              ))}
+            </div>
+          </div>
+
+          <button onClick={() => setLlmSummary(null)} className="mt-10 w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-8 rounded-xl transition-colors cursor-pointer">
+            Rehacer Perfil RPM
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto flex flex-col h-full pb-10">
@@ -300,10 +398,12 @@ function WizardView() {
               <div className="flex-1 flex flex-col animate-in fade-in slide-in-from-right-4 duration-500">
                   <h3 className="text-2xl font-bold text-white mb-4">Paso 1: Results (Resultados)</h3>
                   <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl mb-6 border-l-4 border-l-cyan-500">
-                      <p className="text-cyan-400 font-mono text-sm">[Insertar Texto de Ayuda Contextual aquí]</p>
-                      <p className="text-slate-400 text-sm mt-2">¿Qué resultado exacto y medible quieres lograr en tu mercado LATAM?</p>
+                      <p className="text-cyan-400 font-mono text-sm">El "Qué" exacto.</p>
+                      <p className="text-slate-400 text-sm mt-2">Sé hiper-específico y medible. No digas "quiero ganar más dinero", di "Quiero facturar $10,000 USD mensuales en 6 meses vendiendo software B2B en México". Si tu resultado no tiene un número y una fecha, es solo un deseo.</p>
                   </div>
                   <textarea 
+                    value={rpm.results}
+                    onChange={(e) => setRpm({ ...rpm, results: e.target.value })}
                     className="flex-1 w-full bg-black border border-slate-700 rounded-xl p-4 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all resize-none"
                     placeholder="Ej: Lograr $10,000 USD de MRR vendiendo software a PyMEs..."
                   ></textarea>
@@ -314,12 +414,14 @@ function WizardView() {
               <div className="flex-1 flex flex-col animate-in fade-in slide-in-from-right-4 duration-500">
                   <h3 className="text-2xl font-bold text-white mb-4">Paso 2: Purpose (Propósito)</h3>
                   <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl mb-6 border-l-4 border-l-cyan-500">
-                      <p className="text-cyan-400 font-mono text-sm">[Insertar Texto de Ayuda Contextual aquí]</p>
-                      <p className="text-slate-400 text-sm mt-2">¿Por qué este resultado es absolutamente necesario para ti?</p>
+                      <p className="text-cyan-400 font-mono text-sm">El "Por Qué" profundo.</p>
+                      <p className="text-slate-400 text-sm mt-2">Tu gasolina emocional. Si la motivación es solo superficial, abandonarás a la primera objeción. ¿Qué libertad o impacto radical buscas para ti o tu familia que hace que el resultado sea innegociable?</p>
                   </div>
                   <textarea 
+                    value={rpm.purpose}
+                    onChange={(e) => setRpm({ ...rpm, purpose: e.target.value })}
                     className="flex-1 w-full bg-black border border-slate-700 rounded-xl p-4 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all resize-none"
-                    placeholder="Ej: Quiero libertad financiera para mi familia..."
+                    placeholder="Ej: Quiero libertad geográfica y financiera para no depender de un jefe..."
                   ></textarea>
               </div>
           )}
@@ -328,12 +430,14 @@ function WizardView() {
               <div className="flex-1 flex flex-col animate-in fade-in slide-in-from-right-4 duration-500">
                   <h3 className="text-2xl font-bold text-white mb-4">Paso 3: Massive Action Plan</h3>
                   <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl mb-6 border-l-4 border-l-cyan-500">
-                      <p className="text-cyan-400 font-mono text-sm">[Insertar Texto de Ayuda Contextual aquí]</p>
-                      <p className="text-slate-400 text-sm mt-2">¿Qué acciones masivas inmediatas vas a tomar hoy?</p>
+                      <p className="text-cyan-400 font-mono text-sm">El 80% del impacto con el 20% del esfuerzo.</p>
+                      <p className="text-slate-400 text-sm mt-2">¿Cuáles son las 3 acciones inmediatas e incómodas que tomarás HOY? Olvida las métricas de vanidad (ej. crear el logo). Enfócate en acciones masivas como prospectar clientes en frío o construir el MVP.</p>
                   </div>
                   <textarea 
+                    value={rpm.massiveAction}
+                    onChange={(e) => setRpm({ ...rpm, massiveAction: e.target.value })}
                     className="flex-1 w-full bg-black border border-slate-700 rounded-xl p-4 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all resize-none"
-                    placeholder="Ej: 1. Prospectar 50 empresas. 2. Construir landing page..."
+                    placeholder="Ej: 1. Prospectar 50 empresas en LinkedIn. 2. Lanzar landing page de preventa..."
                   ></textarea>
               </div>
           )}
@@ -341,17 +445,35 @@ function WizardView() {
           <div className="flex justify-between mt-8 pt-6 border-t border-slate-800">
               <button 
                 onClick={handlePrev}
-                disabled={step === 1}
+                disabled={step === 1 || isProcessing}
                 className={`px-6 py-3 rounded-xl font-bold transition-colors cursor-pointer ${step === 1 ? 'text-slate-700 cursor-not-allowed' : 'text-cyan-400 hover:bg-slate-800'}`}
               >
                   Anterior
               </button>
-              <button 
-                onClick={handleNext}
-                className="bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-3 px-8 rounded-xl transition-all shadow-[0_0_15px_rgba(34,211,238,0.2)] hover:shadow-[0_0_25px_rgba(34,211,238,0.4)] cursor-pointer"
-              >
-                  {step === 3 ? 'Generar Soluciones' : 'Siguiente Paso'}
-              </button>
+              {step < 3 ? (
+                <button 
+                  onClick={handleNext}
+                  className="bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-3 px-8 rounded-xl transition-all shadow-[0_0_15px_rgba(34,211,238,0.2)] hover:shadow-[0_0_25px_rgba(34,211,238,0.4)] cursor-pointer"
+                >
+                    Siguiente Paso
+                </button>
+              ) : (
+                <button 
+                  onClick={handleGenerate}
+                  disabled={isProcessing}
+                  className={`font-bold py-3 px-8 rounded-xl transition-all shadow-[0_0_15px_rgba(34,211,238,0.2)] cursor-pointer flex items-center space-x-2 ${isProcessing ? 'bg-slate-700 text-slate-400' : 'bg-cyan-500 hover:bg-cyan-400 text-black hover:shadow-[0_0_25px_rgba(34,211,238,0.4)]'}`}
+                >
+                    {isProcessing ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-cyan-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Analizando...
+                      </>
+                    ) : 'Generar Evaluación IA'}
+                </button>
+              )}
           </div>
       </div>
     </div>
