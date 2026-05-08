@@ -4,7 +4,7 @@ Este proyecto es un motor automatizado que extrae casos de éxito de **Starter S
 
 ## Arquitectura (The 3-Layer Build)
 1. **Layer 1: Architecture & Data (Supabase)** - Persistencia 100% en la nube mediante PostgreSQL.
-2. **Layer 2: Motor de Inteligencia (Python + Gemini)** - Scraper automatizado y extracción RAG de Pain Points.
+2. **Layer 2: Motor de Inteligencia (Python + Apify + Gemini)** - Extracción delegada a la nube de Apify y procesamiento RAG.
 3. **Layer 3: Interfaz de Usuario (Vite + React)** - Un Wizard interactivo y Dashboard con temática "Hacker/Cyan" para consumir las propuestas.
 
 ---
@@ -14,7 +14,7 @@ Este proyecto es un motor automatizado que extrae casos de éxito de **Starter S
 La base de datos relacional está diseñada en base a un esquema determinista para separar el "Raw Input" del "Processed Output".
 
 ### 1. `videos` (Raw Input & Extracted Meta)
-Contiene la base de los casos de estudio crudos obtenidos vía `yt-dlp` y la metadata posteriormente estructurada por el LLM.
+Contiene la base de los casos de estudio crudos obtenidos vía **Apify SDK** y la metadata posteriormente estructurada por el LLM.
 - `video_id` (PK, Text)
 - `url` (Text)
 - `title` (Text)
@@ -32,7 +32,7 @@ Almacena el problema central de cada negocio gringo, **extrapolado al mercado LA
 - `severity_score` (Int) - Índice de severidad (1-100) determinado por la IA.
 
 ### 3. `scraper_logs` (System Analytics)
-Registro histórico de ejecuciones del motor automatizado, vital para monitoreo del Cron Job.
+Registro histórico de ejecuciones del motor automatizado.
 - `log_id` (PK, UUID)
 - `timestamp` (DateTime) - Hora exacta de ejecución.
 - `status` (Text) - Éxito o fallos.
@@ -41,5 +41,5 @@ Registro histórico de ejecuciones del motor automatizado, vital para monitoreo 
 
 *(Las tablas `users_rpm`, `business_proposals` y `mvt_evidence` acompañan el esquema para el posterior cálculo y cruce de datos de las soluciones generadas).*
 
-## Automatización (Cron Job)
-El scraper principal (`tools/scraper.py`) está configurado para ejecutarse en background todos los días a medianoche vía **GitHub Actions**. Esto asegura la ingesta continua de nuevos casos de negocio en nuestra base de datos.
+## Extracción de Datos
+El motor de extracción (`tools/apify_scraper.py`) utiliza la infraestructura de **Apify** para garantizar la ingesta de datos sin bloqueos de IP, operando de forma coordinada con el motor de IA (`tools/llm_extractor.py`) para el procesamiento de transcripts.
