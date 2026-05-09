@@ -45,6 +45,7 @@ def scrape_starter_story_with_apify():
     dataset_items = apify_client.dataset(run["defaultDatasetId"]).list_items().items
     
     videos_procesados = 0
+    videos_actualizados = 0
     for item in dataset_items:
         try:
             video_id = item.get("id") or item.get("url", "").split("v=")[-1]
@@ -55,32 +56,41 @@ def scrape_starter_story_with_apify():
             transcript_text = item.get("text") or item.get("description") or item.get("textOriginal") or ""
             
             if not transcript_text:
+                print(f"  [SKIP] Sin transcripción: {title}")
                 continue
+
+            # Verificar si el video ya existe en la BD
+            existing = supabase.table("videos").select("video_id").eq("video_id", video_id[:255]).execute()
+            is_new = len(existing.data) == 0
 
             # Inyectamos a Supabase
             data = {
-                "video_id": video_id[:255],  # Asegurar límite de tamaño
+                "video_id": video_id[:255],
                 "url": url,
                 "title": title,
-                "transcript_text": transcript_text[:5000] # Límite por seguridad
+                "transcript_text": transcript_text[:5000]
             }
             
-            # Upsert: Si el video ya existe, se actualiza. Si no, se crea.
             supabase.table("videos").upsert(data).execute()
-            videos_procesados += 1
-            print(f"Guardado en DB: {title}")
+            
+            if is_new:
+                videos_procesados += 1
+                print(f"  [NUEVO] Guardado: {title}")
+            else:
+                videos_actualizados += 1
+                print(f"  [YA EXISTE] Saltado: {title}")
             
         except Exception as e:
             print(f"Error guardando item de Apify en DB: {e}")
 
-    # Guardar log de ejecución
+    # Guardar log de ejecución con detalle real
     supabase.table("scraper_logs").insert({
         "status": "APIFY_SUCCESS",
         "videos_processed": videos_procesados,
-        "details": f"Extraídos usando Apify Actor: {actor_id}"
+        "details": f"Nicho buscado: '{nicho_elegido}' | Nuevos: {videos_procesados} | Ya existían: {videos_actualizados}"
     }).execute()
     
-    print(f"🎉 Scraping con Apify finalizado. {videos_procesados} videos nuevos listos para la IA.")
+    print(f"\n🎉 Scraping finalizado. Nuevos: {videos_procesados} | Ya existían: {videos_actualizados}")
 
 if __name__ == "__main__":
     scrape_starter_story_with_apify()
