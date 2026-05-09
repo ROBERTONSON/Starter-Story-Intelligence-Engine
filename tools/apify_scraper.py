@@ -1,5 +1,4 @@
 import os
-import json
 import random
 from dotenv import load_dotenv
 from apify_client import ApifyClient
@@ -22,75 +21,79 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 def scrape_starter_story_with_apify():
     print("🚀 Iniciando extracción con Apify...")
     
-    # Actor público genérico de YouTube en Apify.
-    actor_id = "streamers/youtube-scraper" 
-    
-    # Lista de nichos para garantizar que siempre encuentre videos distintos y la base de datos crezca en la demo
-    nichos = ["vending machine", "pressure washing", "cleaning business", "lawn care", "notion template", "dog walking", "newsletter", "smma", "seo agency", "clothing brand", "real estate", "airbnb"]
+    actor_id = "streamers/youtube-scraper"
+    TARGET_NEW_VIDEOS = 5  # Videos genuinamente nuevos que queremos guardar
+
+    nichos = [
+        "vending machine", "pressure washing", "cleaning business", "lawn care",
+        "notion template", "dog walking", "newsletter", "smma", "seo agency",
+        "clothing brand", "real estate", "airbnb", "dropshipping", "etsy shop",
+        "car wash", "food truck", "freelance design", "app development"
+    ]
     nicho_elegido = random.choice(nichos)
-    
+
+    # Pedimos 4x el target para garantizar que encontremos suficientes nuevos
     run_input = {
         "searchKeywords": f"Starter Story {nicho_elegido}",
-        "maxResults": 5,
+        "maxResults": TARGET_NEW_VIDEOS * 4,
         "maxResultsShorts": 0
     }
 
-    print(f"Llamando al Actor de Apify: {actor_id}")
-    # Esto inicia la ejecución en la nube de Apify y espera a que termine
+    print(f"Buscando nicho: '{nicho_elegido}' | Solicitando {TARGET_NEW_VIDEOS * 4} resultados a Apify...")
     run = apify_client.actor(actor_id).call(run_input=run_input)
-    
-    print("✅ Apify terminó la ejecución. Descargando datos...")
-    
-    # Obtener los resultados del dataset generado por Apify
+
+    print("✅ Apify terminó. Filtrando videos nuevos...")
     dataset_items = apify_client.dataset(run["defaultDatasetId"]).list_items().items
-    
-    videos_procesados = 0
-    videos_actualizados = 0
+
+    videos_nuevos = 0
+    videos_duplicados = 0
+    videos_sin_transcript = 0
+
     for item in dataset_items:
+        # Parar cuando ya tengamos el target cubierto
+        if videos_nuevos >= TARGET_NEW_VIDEOS:
+            break
+
         try:
             video_id = item.get("id") or item.get("url", "").split("v=")[-1]
             title = item.get("title", "Sin título")
             url = item.get("url", f"https://www.youtube.com/watch?v={video_id}")
-            
-            # Dependiendo del actor, el texto largo viene en 'text', 'description' o 'textOriginal'
             transcript_text = item.get("text") or item.get("description") or item.get("textOriginal") or ""
-            
+
             if not transcript_text:
+                videos_sin_transcript += 1
                 print(f"  [SKIP] Sin transcripción: {title}")
                 continue
 
-            # Verificar si el video ya existe en la BD
+            # Verificar si ya existe en la BD antes de contar
             existing = supabase.table("videos").select("video_id").eq("video_id", video_id[:255]).execute()
-            is_new = len(existing.data) == 0
+            if len(existing.data) > 0:
+                videos_duplicados += 1
+                print(f"  [DUPLICADO] Ya existe: {title}")
+                continue
 
-            # Inyectamos a Supabase
+            # Es genuinamente nuevo → lo guardamos
             data = {
                 "video_id": video_id[:255],
                 "url": url,
                 "title": title,
                 "transcript_text": transcript_text[:5000]
             }
-            
             supabase.table("videos").upsert(data).execute()
-            
-            if is_new:
-                videos_procesados += 1
-                print(f"  [NUEVO] Guardado: {title}")
-            else:
-                videos_actualizados += 1
-                print(f"  [YA EXISTE] Saltado: {title}")
-            
-        except Exception as e:
-            print(f"Error guardando item de Apify en DB: {e}")
+            videos_nuevos += 1
+            print(f"  [NUEVO ✅] {videos_nuevos}/{TARGET_NEW_VIDEOS}: {title}")
 
-    # Guardar log de ejecución con detalle real
+        except Exception as e:
+            print(f"Error procesando item: {e}")
+
+    # Guardar log detallado en Supabase
     supabase.table("scraper_logs").insert({
         "status": "APIFY_SUCCESS",
-        "videos_processed": videos_procesados,
-        "details": f"Nicho buscado: '{nicho_elegido}' | Nuevos: {videos_procesados} | Ya existían: {videos_actualizados}"
+        "videos_processed": videos_nuevos,
+        "details": f"Nicho: '{nicho_elegido}' | Nuevos: {videos_nuevos}/{TARGET_NEW_VIDEOS} | Duplicados: {videos_duplicados} | Sin transcript: {videos_sin_transcript}"
     }).execute()
-    
-    print(f"\n🎉 Scraping finalizado. Nuevos: {videos_procesados} | Ya existían: {videos_actualizados}")
+
+    print(f"\n🎉 Extracción finalizada. Nuevos: {videos_nuevos} | Duplicados saltados: {videos_duplicados} | Sin transcript: {videos_sin_transcript}")
 
 if __name__ == "__main__":
     scrape_starter_story_with_apify()
