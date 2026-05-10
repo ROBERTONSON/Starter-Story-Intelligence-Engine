@@ -2,8 +2,8 @@ name: Daily Apify Scraper Cron
 
 on:
   schedule:
-    # Ejecutar todos los días a las 23:30 PM hora Chile/LATAM (03:30 UTC)
-    - cron: '30 3 * * *'
+    # Ejecutar todos los días a las 2:00 AM hora Chile (06:00 UTC)
+    - cron: '0 6 * * *'
   workflow_dispatch: # Permite ejecución manual desde GitHub UI
 
 jobs:
