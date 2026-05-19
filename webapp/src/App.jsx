@@ -38,6 +38,11 @@ function App() {
           </div>
 
           <div>
+            <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Fase 5 — MVT</p>
+            <SidebarItem name="MVT (Fase 5)" current={currentView} set={setCurrentView} icon="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </div>
+
+          <div>
             <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Sistema</p>
             <SidebarItem name="Ajustes" current={currentView} set={setCurrentView} icon="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
           </div>
@@ -50,7 +55,9 @@ function App() {
         {currentView === 'Wizard RPM' && <WizardView />}
         {currentView === 'Videos' && <VideosView />}
         {currentView === 'Pain Points LATAM' && <PainPointsView />}
-        {currentView !== 'Dashboard' && currentView !== 'Wizard RPM' && currentView !== 'Videos' && currentView !== 'Pain Points LATAM' && (
+        {currentView === 'Motor de Soluciones' && <SolutionsEngineView setCurrentView={setCurrentView} />}
+        {currentView === 'MVT (Fase 5)' && <MVTView />}
+        {currentView !== 'Dashboard' && currentView !== 'Wizard RPM' && currentView !== 'Videos' && currentView !== 'Pain Points LATAM' && currentView !== 'Motor de Soluciones' && currentView !== 'MVT (Fase 5)' && (
           <div className="flex items-center justify-center h-full text-slate-500">
             Vista en construcción: {currentView}
           </div>
@@ -537,6 +544,344 @@ function WizardView() {
                 </button>
               )}
           </div>
+      </div>
+    </div>
+  );
+}
+
+function SolutionsEngineView({ setCurrentView }) {
+  const [proposals, setProposals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [hasRPM, setHasRPM] = useState(false);
+
+  useEffect(() => {
+    fetchProposals();
+    checkRPM();
+  }, []);
+
+  async function checkRPM() {
+    const { data } = await supabase.from('users_rpm').select('*').eq('user_id', 'dev_user').single();
+    if (data) setHasRPM(true);
+  }
+
+  async function fetchProposals() {
+    setLoading(true);
+    const { data } = await supabase.from('business_proposals').select(`
+      *,
+      latam_pain_points (category)
+    `).order('fit_score', { ascending: false });
+    if (data) setProposals(data);
+    setLoading(false);
+  }
+
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    try {
+      // 1. Obtener datos de BD
+      const { data: rpmData } = await supabase.from('users_rpm').select('*').eq('user_id', 'dev_user').single();
+      const { data: painPoints } = await supabase.from('latam_pain_points').select('*').order('severity_score', { ascending: false }).limit(5);
+      const { data: videos } = await supabase.from('videos').select('video_id, title, url, business_model, entrepreneur_action').not('pain_point_match', 'is', null).limit(10);
+
+      if (!rpmData || !painPoints || !videos) {
+          alert("Faltan datos base (RPM, Pain Points o Videos clasificados). Asegúrate de completar los pasos anteriores.");
+          setIsGenerating(false);
+          return;
+      }
+
+      // 2. Inicializar Gemini
+      const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+      // 3. Prompt Maestro
+      const prompt = `
+        Eres un estratega de negocios top. Cruza estos datos para generar 4 propuestas de negocio en LATAM.
+        
+        PERFIL DEL USUARIO (RPM):
+        Resultados: ${rpmData.results_desired}
+        Propósito: ${rpmData.purpose}
+        Plan de Acción: ${rpmData.massive_action_plan}
+
+        PROBLEMAS DE LATAM A RESOLVER:
+        ${JSON.stringify(painPoints.map(p => ({id: p.pain_point_id, cat: p.category, desc: p.description})))}
+
+        CASOS DE ÉXITO GLOBALES (Inspiración):
+        ${JSON.stringify(videos)}
+
+        Genera 4 propuestas de negocio que el usuario pueda ejecutar, que resuelvan los problemas de LATAM y que imiten los casos de éxito.
+        
+        Devuelve SOLO un JSON estrictamente con esta estructura:
+        {
+          "proposals": [
+            {
+              "title": "Nombre atractivo de la propuesta",
+              "description": "Explicación de qué es, a quién se vende y cómo hace dinero.",
+              "fit_score": 95, 
+              "difficulty": "Baja",
+              "target_pain_point_id": "ID exacto del pain point de la lista anterior que resuelve",
+              "actionable_steps": ["Paso 1 exacto", "Paso 2 exacto", "Paso 3 exacto"],
+              "source_videos": [
+                 { "title": "Título del video de los casos de éxito", "url": "URL del video extraído de la lista de casos" }
+              ]
+            }
+          ]
+        }
+      `;
+
+      const result = await model.generateContent(prompt);
+      let text = result.response.text().trim();
+      
+      if (text.startsWith("```json")) text = text.slice(7);
+      if (text.endsWith("```")) text = text.slice(0, -3);
+      
+      const parsedData = JSON.parse(text.trim());
+      
+      // 4. Guardar en Supabase
+      const insertData = parsedData.proposals.map(p => ({
+        title: p.title,
+        description: p.description,
+        fit_score: p.fit_score,
+        difficulty: p.difficulty || 'Media',
+        target_pain_point_id: p.target_pain_point_id,
+        actionable_steps: p.actionable_steps,
+        source_video_ids: p.source_videos || []
+      }));
+
+      // Borramos las anteriores para mantener limpio el demo (Opcional)
+      await supabase.from('business_proposals').delete().neq('title', 'placeholder');
+      
+      await supabase.from('business_proposals').insert(insertData);
+      
+      await fetchProposals();
+
+    } catch (error) {
+      console.error("Error generando propuestas:", error);
+      alert("Hubo un error con la IA. Intenta nuevamente.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  if (!hasRPM) {
+      return (
+          <div className="max-w-4xl mx-auto text-center pt-20">
+              <h2 className="text-3xl font-bold text-white mb-4">Motor de Valor Bloqueado</h2>
+              <p className="text-slate-400 mb-8">Necesitas completar tu perfil RPM en el Wizard antes de poder generar propuestas cruzadas.</p>
+          </div>
+      );
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-8 pb-12">
+      <header className="flex justify-between items-end mb-10">
+        <div>
+          <h2 className="text-3xl font-bold text-white mb-2">Motor de Soluciones (Cruce)</h2>
+          <p className="text-slate-400">Propuestas generadas cruzando tu RPM con los Pain Points y Casos de Éxito</p>
+        </div>
+        <button 
+          onClick={handleGenerate}
+          disabled={isGenerating}
+          className={`bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)] flex items-center space-x-2 ${isGenerating ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-[0_0_30px_rgba(34,211,238,0.5)] cursor-pointer'}`}
+        >
+            {isGenerating ? (
+                <>
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    <span>Generando Magia...</span>
+                </>
+            ) : (
+                <>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                    <span>Inyectar Motor IA</span>
+                </>
+            )}
+        </button>
+      </header>
+
+      {loading ? (
+          <div className="text-cyan-400 text-center py-10 font-mono animate-pulse">Cargando base de datos...</div>
+      ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {proposals.map(p => (
+                  <div key={p.proposal_id} className="bg-[#0b0f19] border border-cyan-500/20 rounded-2xl p-6 relative overflow-hidden group hover:border-cyan-500/50 transition-colors shadow-2xl">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl -mr-10 -mt-10"></div>
+                      
+                      <div className="flex justify-between items-start mb-4">
+                          <h3 className="text-xl font-bold text-white max-w-[70%]">{p.title}</h3>
+                          <div className="flex flex-col items-end">
+                              <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-1">Fit Score</span>
+                              <div className="text-2xl font-black text-cyan-400">{p.fit_score}%</div>
+                          </div>
+                      </div>
+
+                      <div className="flex space-x-3 mb-6">
+                          <span className={`px-2.5 py-1 text-[10px] uppercase font-bold rounded-md border ${
+                              p.difficulty === 'Baja' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
+                              p.difficulty === 'Alta' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 
+                              'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                          }`}>
+                              Dificultad {p.difficulty || 'Media'}
+                          </span>
+                          {p.latam_pain_points && (
+                              <span className="px-2.5 py-1 text-[10px] uppercase font-bold rounded-md bg-slate-800 text-slate-400 border border-slate-700 truncate max-w-[150px]">
+                                  {p.latam_pain_points.category}
+                              </span>
+                          )}
+                      </div>
+
+                      <p className="text-sm text-slate-300 leading-relaxed mb-6">{p.description}</p>
+
+                      <div className="bg-black/50 rounded-xl p-4 border border-slate-800/80 mb-4">
+                          <h4 className="text-[11px] font-bold text-cyan-500 uppercase tracking-widest mb-3">Actionable Steps</h4>
+                          <ul className="space-y-2">
+                              {p.actionable_steps && p.actionable_steps.map((step, idx) => (
+                                  <li key={idx} className="flex text-sm text-slate-400">
+                                      <span className="text-cyan-500 mr-2 font-bold">{idx+1}.</span>
+                                      {step}
+                                  </li>
+                              ))}
+                          </ul>
+                      </div>
+
+                      {p.source_video_ids && p.source_video_ids.length > 0 && (
+                          <div className="mb-6">
+                              <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">Videos Inspiración</h4>
+                              <div className="flex flex-col space-y-2">
+                                  {p.source_video_ids.map((vid, idx) => (
+                                      <a key={idx} href={vid.url} target="_blank" rel="noreferrer" className="text-xs text-blue-400 hover:text-blue-300 flex items-center bg-blue-500/10 p-2 rounded border border-blue-500/20 w-fit">
+                                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 24 24"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"/></svg>
+                                          {vid.title}
+                                      </a>
+                                  ))}
+                              </div>
+                          </div>
+                      )}
+
+                      <button 
+                          onClick={async () => {
+                              // Borramos MVT anterior para demo, creamos el nuevo y redirigimos
+                              await supabase.from('mvt_evidence').delete().neq('validation_status', 'placeholder');
+                              await supabase.from('mvt_evidence').insert([{ proposal_id: p.proposal_id, validation_status: 'En Inmersión' }]);
+                              setCurrentView('MVT (Fase 5)');
+                          }}
+                          className="w-full py-3 bg-slate-800 hover:bg-cyan-600 text-white text-sm font-bold rounded-lg transition-colors border border-slate-700 hover:border-cyan-500"
+                      >
+                          Seleccionar para MVT
+                      </button>
+                  </div>
+              ))}
+              {proposals.length === 0 && (
+                  <div className="col-span-2 text-center py-16 border-2 border-dashed border-slate-800 rounded-2xl">
+                      <p className="text-slate-500 mb-2">Aún no hay propuestas de valor generadas.</p>
+                      <p className="text-sm text-slate-600">Presiona "Inyectar Motor IA" para cruzar tu perfil con el mercado.</p>
+                  </div>
+              )}
+          </div>
+      )}
+    </div>
+  );
+}
+
+function MVTView() {
+  const [evidence, setEvidence] = useState(null);
+  const [proposal, setProposal] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState([{ name: '', feedback: '' }, { name: '', feedback: '' }, { name: '', feedback: '' }]);
+
+  useEffect(() => {
+    fetchMVT();
+  }, []);
+
+  async function fetchMVT() {
+    setLoading(true);
+    const { data: evData } = await supabase.from('mvt_evidence').select('*').neq('validation_status', 'placeholder').single();
+    if (evData) {
+      setEvidence(evData);
+      if (evData.evidence_logs && evData.evidence_logs.length > 0) {
+        // If logs exist in DB, populate them, otherwise keep empty 3
+        setLogs(evData.evidence_logs);
+      }
+      
+      const { data: propData } = await supabase.from('business_proposals').select('*').eq('proposal_id', evData.proposal_id).single();
+      setProposal(propData);
+    }
+    setLoading(false);
+  }
+
+  const handleSaveLogs = async () => {
+    if (!evidence) return;
+    await supabase.from('mvt_evidence').update({
+      evidence_logs: logs,
+      validation_status: 'Documentado'
+    }).eq('mvt_id', evidence.mvt_id);
+    alert('¡Conversaciones documentadas correctamente en la base de datos!');
+  };
+
+  const updateLog = (index, field, value) => {
+    const newLogs = [...logs];
+    newLogs[index][field] = value;
+    setLogs(newLogs);
+  };
+
+  if (loading) return <div className="text-cyan-400 text-center py-10 font-mono animate-pulse">Cargando MVT...</div>;
+
+  if (!evidence || !proposal) {
+    return (
+      <div className="max-w-4xl mx-auto text-center pt-20">
+        <h2 className="text-3xl font-bold text-white mb-4">No has seleccionado ninguna propuesta</h2>
+        <p className="text-slate-400 mb-8">Ve al Motor de Soluciones y presiona "Seleccionar para MVT" en la idea que más te guste.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto pb-12">
+      <header className="mb-10">
+        <span className="text-cyan-500 font-bold tracking-widest text-sm mb-2 block">PASO 1 DEL MVT</span>
+        <h2 className="text-3xl font-bold text-white mb-2">Inmersión en la Calle</h2>
+        <p className="text-slate-400">Documenta las 3 conversaciones mínimas requeridas sobre tu propuesta elegida.</p>
+      </header>
+
+      <div className="bg-[#0b0f19] border border-cyan-500/50 rounded-2xl p-6 mb-10 shadow-[0_0_30px_rgba(34,211,238,0.1)]">
+        <h3 className="text-xl font-bold text-white mb-2">Propuesta Elegida: {proposal.title}</h3>
+        <p className="text-slate-400 text-sm">{proposal.description}</p>
+      </div>
+
+      <div className="space-y-6">
+        <h3 className="text-xl font-bold text-white">Documentación de Entrevistas</h3>
+        
+        {logs.map((log, index) => (
+          <div key={index} className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+            <h4 className="text-cyan-400 font-bold mb-4">Conversación #{index + 1}</h4>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">¿Con quién hablaste? (Perfil)</label>
+                <input 
+                  type="text" 
+                  value={log.name}
+                  onChange={(e) => updateLog(index, 'name', e.target.value)}
+                  className="w-full bg-black border border-slate-700 rounded-lg p-3 text-white focus:border-cyan-500 focus:outline-none"
+                  placeholder="Ej: Juan, Dueño de agencia de marketing en Chile"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Feedback recibido (Dolor validado o rechazado)</label>
+                <textarea 
+                  value={log.feedback}
+                  onChange={(e) => updateLog(index, 'feedback', e.target.value)}
+                  className="w-full bg-black border border-slate-700 rounded-lg p-3 text-white h-24 focus:border-cyan-500 focus:outline-none"
+                  placeholder="Ej: Me dijo que el problema principal no es crear contenido, sino medir el ROI. Interesante pivote."
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+
+        <button 
+          onClick={handleSaveLogs}
+          className="w-full mt-6 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-4 rounded-xl transition-colors shadow-lg"
+        >
+          Guardar Evidencias MVT en Supabase
+        </button>
       </div>
     </div>
   );
