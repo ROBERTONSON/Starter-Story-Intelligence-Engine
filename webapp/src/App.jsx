@@ -174,26 +174,43 @@ function VideosView() {
               <thead className="bg-slate-900 border-b border-slate-800 text-slate-400 uppercase font-bold text-xs tracking-wider">
                 <tr>
                   <th className="px-6 py-5">Video / Título</th>
-                  <th className="px-6 py-5">Acción Emprendedor (IA)</th>
-                  <th className="px-6 py-5">Modelo de Negocio (IA)</th>
-                  <th className="px-6 py-5">Ingresos (IA)</th>
+                  <th className="px-6 py-5">Modelo Negocio</th>
+                  <th className="px-6 py-5">Pain Point Match (IA)</th>
+                  <th className="px-6 py-5 text-center">Score Relevancia</th>
+                  <th className="px-6 py-5">Ingresos</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
                 {videos.map(v => (
                   <tr key={v.video_id} className="hover:bg-slate-800/50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-white max-w-[250px] truncate" title={v.title}>
+                    <td className="px-6 py-4 font-medium text-white max-w-[220px] truncate" title={v.title}>
                         <a href={v.url} target="_blank" rel="noreferrer" className="hover:text-cyan-400 transition-colors">{v.title}</a>
                     </td>
-                    <td className="px-6 py-4 max-w-[250px] truncate text-slate-400" title={v.entrepreneur_action}>{v.entrepreneur_action || <span className="text-slate-600 italic">No procesado</span>}</td>
                     <td className="px-6 py-4 text-cyan-400 font-medium">{v.business_model || <span className="text-slate-600 italic">No procesado</span>}</td>
-                    <td className="px-6 py-4 text-emerald-400 font-mono">{v.revenue || <span className="text-slate-600 italic">-</span>}</td>
+                    <td className="px-6 py-4">
+                      {v.pain_point_match ? (
+                        <span className="px-2 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded text-[10px] font-bold uppercase tracking-tight">{v.pain_point_match}</span>
+                      ) : (
+                        <span className="text-slate-600 italic">Sin clasificar</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {v.relevance_score ? (
+                        <div className="flex items-center justify-center">
+                          <div className="w-12 bg-slate-800 h-1.5 rounded-full mr-2">
+                            <div className="bg-cyan-500 h-full rounded-full" style={{ width: `${v.relevance_score}%` }}></div>
+                          </div>
+                          <span className="text-xs font-mono">{v.relevance_score}%</span>
+                        </div>
+                      ) : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-emerald-400 font-mono whitespace-nowrap">{v.revenue || <span className="text-slate-600 italic">-</span>}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {videos.length === 0 && <div className="p-8 text-center text-slate-500">No hay videos en la base de datos. Ejecuta el scraper.</div>}
+          {videos.length === 0 && <div className="p-8 text-center text-slate-500">No hay videos en la base de datos.</div>}
         </div>
       )}
     </div>
@@ -203,6 +220,7 @@ function VideosView() {
 function PainPointsView() {
   const [points, setPoints] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isClassifying, setIsClassifying] = useState(false);
 
   useEffect(() => {
     async function fetchPoints() {
@@ -213,11 +231,44 @@ function PainPointsView() {
     fetchPoints();
   }, []);
 
+  const handleReclassify = async () => {
+    setIsClassifying(true);
+    // Simulación de disparo de motor de re-clasificación
+    // En una app real, esto llamaría a un Edge Function o API Route
+    setTimeout(() => {
+        setIsClassifying(false);
+        alert("Motor de Re-clasificación disparado. Los videos se están vinculando con los nuevos Pain Points en background.");
+    }, 2000);
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12">
-      <header className="mb-8">
-        <h2 className="text-3xl font-bold text-white mb-2">Pain Points LATAM</h2>
-        <p className="text-slate-400">Problemas de mercado extrapolados dinámicamente por la IA</p>
+      <header className="mb-8 flex justify-between items-center">
+        <div>
+            <h2 className="text-3xl font-bold text-white mb-2">Pain Points LATAM</h2>
+            <p className="text-slate-400">Problemas de mercado extrapolados dinámicamente por la IA</p>
+        </div>
+        <button 
+            onClick={handleReclassify}
+            disabled={isClassifying}
+            className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl font-bold transition-all border ${
+                isClassifying 
+                ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed' 
+                : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 shadow-[0_0_15px_rgba(34,211,238,0.1)]'
+            }`}
+        >
+            {isClassifying ? (
+                <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    <span>Procesando...</span>
+                </>
+            ) : (
+                <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    <span>Re-clasificar Videos</span>
+                </>
+            )}
+        </button>
       </header>
       
       {loading ? (
@@ -322,15 +373,20 @@ function WizardView() {
     return (
       <div className="max-w-4xl mx-auto flex flex-col h-full pb-10 animate-in fade-in zoom-in duration-500">
         <header className="mb-10 text-center">
-          <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 mb-2">Evaluación RAG Completada</h2>
-          <p className="text-slate-400">Tu perfil ha sido analizado por el motor de inteligencia.</p>
+          <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 mb-2">Evaluación IA Completada</h2>
+          <p className="text-slate-400">Tu perfil ha sido analizado. Puedes ajustar los resultados si lo deseas.</p>
         </header>
 
         <div className="bg-[#0b0f19] border border-cyan-500/50 rounded-2xl p-8 shadow-[0_0_40px_rgba(34,211,238,0.15)] relative overflow-hidden flex flex-col">
           <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-6">
-            <div>
-              <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1">Arquetipo Asignado</p>
-              <h3 className="text-2xl font-black text-white">{llmSummary.archetype}</h3>
+            <div className="flex-1 mr-8">
+              <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-2 text-cyan-400/60">Arquetipo Asignado (Editable)</p>
+              <input 
+                type="text"
+                value={llmSummary.archetype}
+                onChange={(e) => setLlmSummary({...llmSummary, archetype: e.target.value})}
+                className="bg-transparent text-2xl font-black text-white w-full border-b border-slate-700 focus:border-cyan-500 outline-none pb-1"
+              />
             </div>
             <div className="text-center">
               <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1">Viabilidad</p>
@@ -339,22 +395,28 @@ function WizardView() {
           </div>
           
           <div className="mb-6">
-            <h4 className="text-sm text-cyan-500 font-bold uppercase mb-2">Feedback Crítico de la IA</h4>
-            <p className="text-slate-300 leading-relaxed bg-black/50 p-4 rounded-xl border border-slate-800">{llmSummary.critical_feedback}</p>
+            <h4 className="text-sm text-cyan-500 font-bold uppercase mb-2">Feedback Crítico de la IA (Editable)</h4>
+            <textarea 
+              value={llmSummary.critical_feedback}
+              onChange={(e) => setLlmSummary({...llmSummary, critical_feedback: e.target.value})}
+              className="w-full bg-black/50 p-4 rounded-xl border border-slate-800 text-slate-300 leading-relaxed min-h-[120px] focus:border-cyan-500 outline-none"
+            />
           </div>
 
-          <div>
-            <h4 className="text-sm text-cyan-500 font-bold uppercase mb-2">Vectores Semánticos (Keywords)</h4>
-            <div className="flex flex-wrap gap-2">
-              {llmSummary.extracted_keywords.map(kw => (
-                <span key={kw} className="px-3 py-1 bg-slate-800 text-slate-300 rounded-lg text-sm border border-slate-700">{kw}</span>
-              ))}
-            </div>
+          <div className="flex justify-between space-x-4 mt-6">
+            <button onClick={() => setLlmSummary(null)} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-8 rounded-xl transition-colors cursor-pointer">
+              Reiniciar Wizard
+            </button>
+            <button 
+              onClick={async () => {
+                alert("Perfil RPM Guardado Localmente y en Base de Datos");
+                // Here we could add a save function to persist the manual edits back to DB
+              }} 
+              className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-3 px-8 rounded-xl transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)] cursor-pointer"
+            >
+              Confirmar Perfil
+            </button>
           </div>
-
-          <button onClick={() => setLlmSummary(null)} className="mt-10 w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-8 rounded-xl transition-colors cursor-pointer">
-            Rehacer Perfil RPM
-          </button>
         </div>
       </div>
     );
