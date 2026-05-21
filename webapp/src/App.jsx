@@ -785,7 +785,16 @@ function MVTView() {
   const [evidence, setEvidence] = useState(null);
   const [proposal, setProposal] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [logs, setLogs] = useState([{ name: '', feedback: '' }, { name: '', feedback: '' }, { name: '', feedback: '' }]);
+  const [logs, setLogs] = useState([
+    { name: '', feedback: '' }, 
+    { name: '', feedback: '' }, 
+    { name: '', feedback: '' },
+    { name: '', feedback: '' },
+    { name: '', feedback: '' }
+  ]);
+  const [hypothesis, setHypothesis] = useState('');
+  const [testDesign, setTestDesign] = useState('');
+  const [analysisResult, setAnalysisResult] = useState('');
 
   useEffect(() => {
     fetchMVT();
@@ -797,9 +806,15 @@ function MVTView() {
     if (evData) {
       setEvidence(evData);
       if (evData.evidence_logs && evData.evidence_logs.length > 0) {
-        // If logs exist in DB, populate them, otherwise keep empty 3
-        setLogs(evData.evidence_logs);
+        // If logs exist in DB, populate them (ensure there are 5)
+        const dbLogs = evData.evidence_logs;
+        while(dbLogs.length < 5) dbLogs.push({ name: '', feedback: '' });
+        setLogs(dbLogs);
       }
+      
+      setHypothesis(evData.hypothesis || '');
+      setTestDesign(evData.test_design || '');
+      setAnalysisResult(evData.analysis_result || '');
       
       const { data: propData } = await supabase.from('business_proposals').select('*').eq('proposal_id', evData.proposal_id).single();
       setProposal(propData);
@@ -811,6 +826,9 @@ function MVTView() {
     if (!evidence) return;
     await supabase.from('mvt_evidence').update({
       evidence_logs: logs,
+      hypothesis: hypothesis,
+      test_design: testDesign,
+      analysis_result: analysisResult,
       validation_status: 'Documentado'
     }).eq('mvt_id', evidence.mvt_id);
     alert('¡Conversaciones documentadas correctamente en la base de datos!');
@@ -837,8 +855,8 @@ function MVTView() {
     <div className="max-w-4xl mx-auto pb-12">
       <header className="mb-10">
         <span className="text-cyan-500 font-bold tracking-widest text-sm mb-2 block">PASO 1 DEL MVT</span>
-        <h2 className="text-3xl font-bold text-white mb-2">Inmersión en la Calle</h2>
-        <p className="text-slate-400">Documenta las 3 conversaciones mínimas requeridas sobre tu propuesta elegida.</p>
+        <h2 className="text-3xl font-bold text-white mb-2">Inmersión en la Calle (5 Entrevistas)</h2>
+        <p className="text-slate-400">Documenta las 5 conversaciones mínimas requeridas sobre tu propuesta elegida.</p>
       </header>
 
       <div className="bg-[#0b0f19] border border-cyan-500/50 rounded-2xl p-6 mb-10 shadow-[0_0_30px_rgba(34,211,238,0.1)]">
@@ -875,6 +893,40 @@ function MVTView() {
             </div>
           </div>
         ))}
+
+        <div className="border-t border-slate-800 pt-8 mt-8 space-y-6">
+          <h3 className="text-xl font-bold text-white mb-4">Validación de Mercado (Cierre del MVT)</h3>
+          
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Lista de mínimo 5 hipótesis rankeadas (2-3 críticas)</label>
+            <textarea 
+              value={hypothesis}
+              onChange={(e) => setHypothesis(e.target.value)}
+              className="w-full bg-black border border-slate-700 rounded-lg p-3 text-white h-32 focus:border-cyan-500 focus:outline-none"
+              placeholder="1. [CRÍTICA] Creemos que... &#10;2. [CRÍTICA] Creemos que... &#10;3. Creemos que... &#10;4. Creemos que... &#10;5. Creemos que..."
+            />
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Test Ejecutado y Evidencia (Pega URLs/Drive)</label>
+            <textarea 
+              value={testDesign}
+              onChange={(e) => setTestDesign(e.target.value)}
+              className="w-full bg-black border border-slate-700 rounded-lg p-3 text-white h-24 focus:border-cyan-500 focus:outline-none"
+              placeholder="Ej: Hicimos un Smoke Test usando esta Landing Page (URL: misitio.carrd.co). URL Evidencia Capturas: drive.google.com/..."
+            />
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Conclusión y Decisión (Métrica objetivo vs Real)</label>
+            <textarea 
+              value={analysisResult}
+              onChange={(e) => setAnalysisResult(e.target.value)}
+              className="w-full bg-black border border-slate-700 rounded-lg p-3 text-white h-32 focus:border-cyan-500 focus:outline-none"
+              placeholder="Métrica objetivo: 5 ventas previas. &#10;Métrica real: 2 ventas previas. &#10;Conclusión: Invalidada parcialmente. &#10;Decisión: Ajustar el precio y pivotar hacia..."
+            />
+          </div>
+        </div>
 
         <button 
           onClick={handleSaveLogs}

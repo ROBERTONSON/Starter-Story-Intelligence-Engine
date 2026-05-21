@@ -65,6 +65,12 @@ def scrape_starter_story_with_apify():
                 print(f"  [SKIP] Sin transcripción: {title}")
                 continue
 
+            # Filtrar estrictamente por el canal Starter Story
+            channel_name = item.get("channelName") or item.get("author") or ""
+            if "starter story" not in channel_name.lower():
+                print(f"  [SKIP] No es del canal Starter Story (es de '{channel_name}'): {title}")
+                continue
+
             # Verificar si ya existe en la BD antes de contar
             existing = supabase.table("videos").select("video_id").eq("video_id", video_id[:255]).execute()
             if len(existing.data) > 0:
