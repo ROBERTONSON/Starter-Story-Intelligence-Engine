@@ -24,22 +24,16 @@ def scrape_starter_story_with_apify():
     actor_id = "streamers/youtube-scraper"
     TARGET_NEW_VIDEOS = 5  # Videos genuinamente nuevos que queremos guardar
 
-    nichos = [
-        "vending machine", "pressure washing", "cleaning business", "lawn care",
-        "notion template", "dog walking", "newsletter", "smma", "seo agency",
-        "clothing brand", "real estate", "airbnb", "dropshipping", "etsy shop",
-        "car wash", "food truck", "freelance design", "app development"
-    ]
-    nicho_elegido = random.choice(nichos)
+    # Apuntar DIRECTAMENTE al canal oficial de Starter Story
+    STARTER_STORY_CHANNEL = "https://www.youtube.com/@StarterStory/videos"
 
-    # Pedimos 4x el target para garantizar que encontremos suficientes nuevos
     run_input = {
-        "searchKeywords": f"Starter Story {nicho_elegido}",
+        "startUrls": [{ "url": STARTER_STORY_CHANNEL }],
         "maxResults": TARGET_NEW_VIDEOS * 4,
         "maxResultsShorts": 0
     }
 
-    print(f"Buscando nicho: '{nicho_elegido}' | Solicitando {TARGET_NEW_VIDEOS * 4} resultados a Apify...")
+    print(f"Scrapeando canal oficial Starter Story | Solicitando {TARGET_NEW_VIDEOS * 4} resultados a Apify...")
     run = apify_client.actor(actor_id).call(run_input=run_input)
 
     print("✅ Apify terminó. Filtrando videos nuevos...")
@@ -96,7 +90,7 @@ def scrape_starter_story_with_apify():
     supabase.table("scraper_logs").insert({
         "status": "APIFY_SUCCESS",
         "videos_processed": videos_nuevos,
-        "details": f"Nicho: '{nicho_elegido}' | Nuevos: {videos_nuevos}/{TARGET_NEW_VIDEOS} | Duplicados: {videos_duplicados} | Sin transcript: {videos_sin_transcript}"
+        "details": f"Canal: Starter Story (Oficial) | Nuevos: {videos_nuevos}/{TARGET_NEW_VIDEOS} | Duplicados: {videos_duplicados} | Sin transcript: {videos_sin_transcript}"
     }).execute()
 
     print(f"\n🎉 Extracción finalizada. Nuevos: {videos_nuevos} | Duplicados saltados: {videos_duplicados} | Sin transcript: {videos_sin_transcript}")
