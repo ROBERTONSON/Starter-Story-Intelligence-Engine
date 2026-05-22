@@ -2,6 +2,26 @@
 
 Este proyecto es un motor automatizado que extrae casos de éxito de **Starter Story**, procesa sus transcripciones mediante Inteligencia Artificial (Gemini) para extraer dolores del mercado (Pain Points), modelo de negocio e ingresos, y posteriormente cruza esa información con el perfil del usuario (RPM) para sugerir nuevas propuestas de negocio viables en Latinoamérica.
 
+## Herramienta de Desarrollo
+
+Este proyecto fue desarrollado utilizando **Antigravity** como herramienta de asistencia de IA para el desarrollo. Antigravity permitió acelerar la planificación de la arquitectura, la generación de código y la iteración sobre los distintos módulos del sistema, manteniendo siempre al desarrollador en control de las decisiones técnicas y de diseño.
+
+---
+
+## Deployment
+
+La aplicación está desplegada en **Vercel** y accesible públicamente en:
+
+> [https://starter-story-intelligence-engine.vercel.app](https://starter-story-intelligence-engine.vercel.app)
+
+Vercel fue elegido como plataforma de deployment por las siguientes razones:
+- Integración nativa con repositorios GitHub (deploy automático en cada push a `main`)
+- Soporte de primera clase para proyectos Vite + React sin configuración adicional
+- CDN global con baja latencia para usuarios en LATAM
+- Tier gratuito suficiente para el alcance del proyecto
+
+---
+
 ## Arquitectura (The 3-Layer Build)
 1. **Layer 1: Architecture & Data (Supabase)** - Persistencia 100% en la nube mediante PostgreSQL.
 2. **Layer 2: Motor de Inteligencia (Python + Apify + Gemini)** - Extracción delegada a la nube de Apify y procesamiento RAG.
@@ -41,5 +61,47 @@ Registro histórico de ejecuciones del motor automatizado.
 
 *(Las tablas `users_rpm`, `business_proposals` y `mvt_evidence` acompañan el esquema para el posterior cálculo y cruce de datos de las soluciones generadas).*
 
+---
+
 ## Extracción de Datos
 El motor de extracción (`tools/apify_scraper.py`) utiliza la infraestructura de **Apify** para garantizar la ingesta de datos sin bloqueos de IP, operando de forma coordinada con el motor de IA (`tools/llm_extractor.py`) para el procesamiento de transcripts.
+
+---
+
+## Fuentes de Investigación — Pain Points LATAM
+
+Los pain points extrapolados al mercado latinoamericano están respaldados por investigación de fuentes institucionales de primer nivel:
+
+### Banco Interamericano de Desarrollo (BID / IADB)
+- **Digitalización de PyMEs en LATAM**: El BID documenta que las pequeñas y medianas empresas en América Latina enfrentan una brecha significativa de digitalización respecto a economías desarrolladas, con acceso limitado a herramientas tecnológicas asequibles y culturalmente adaptadas.
+- Fuente: [iadb.org — Digital Transformation in Latin America and the Caribbean](https://publications.iadb.org/en/digital-transformation-public-employment-services-across-latin-america-and-caribbean)
+
+### CEPAL (Comisión Económica para América Latina y el Caribe)
+- **Brecha digital y productividad**: La CEPAL identifica que la baja adopción tecnológica en PyMEs latinoamericanas es uno de los principales factores que limita su productividad y competitividad regional. El Anuario Estadístico 2023 de la CEPAL documenta indicadores económicos y sociodemográficos que sustentan la identificación de mercados objetivo.
+- **Digitalización gubernamental y empresarial**: Estudios de CEPAL sobre transformación digital en la región confirman que sectores como fintech, logística, salud y educación presentan las mayores brechas de soluciones digitales accesibles.
+- Fuente: [cepal.org — Anuario Estadístico de América Latina y el Caribe 2023](https://www.cepal.org/en/publications/68991-anuario-estadistico-america-latina-caribe-2023-statistical-yearbook-latin-america)
+
+### Banco Mundial
+- **Conectividad y crecimiento económico**: El Banco Mundial estima que la digitalización puede impulsar significativamente el PIB regional, con proyecciones de crecimiento del 2.3-2.6% para 2024-2025, donde la adopción tecnológica en PyMEs es un factor clave.
+- Fuente: [worldbank.org — Digital Solutions Can Fuel Growth in Latin America](https://www.worldbank.org/en/news/press-release/2023/10/04/conectividad-digital-impulsa-crecimiento-inclusion-perspectivas-america-latina-caribe)
+
+### Atlantico — Latin America Digital Transformation Report 2023
+- **PyMEs y productividad digital**: Este reporte especializado en ecosistemas digitales LATAM documenta que la digitalización de PyMEs puede cerrar la brecha de productividad respecto a economías más desarrolladas, siendo este el segmento con mayor potencial de impacto.
+- Fuente: [atlantico.vc — Latin America Digital Transformation Report 2023](https://www.atlantico.vc/latin-america-digital-transformation-report-2023)
+
+---
+
+## Motor Dinámico — Prueba de Reactividad RPM
+
+El sistema está diseñado para ser completamente reactivo al perfil del usuario. Cuando el perfil RPM cambia, las propuestas generadas cambian en consecuencia.
+
+**Cómo funciona:**
+1. El usuario completa el Wizard RPM con sus Resultados, Propósito y Plan de Acción Masiva
+2. Al presionar "Inyectar Motor IA" en el Motor de Soluciones, el sistema consulta el perfil RPM guardado en Supabase
+3. Gemini cruza ese perfil con los pain points LATAM y los videos clasificados para generar propuestas personalizadas
+4. Si el usuario modifica su RPM y vuelve a inyectar el motor, las propuestas cambian reflejando el nuevo perfil
+
+**Prueba destructiva documentada:**
+- Perfil RPM original: orientado a software B2B para PyMEs → propuestas generadas: herramientas SaaS de productividad
+- Perfil RPM modificado: orientado a contenido y marketing digital → propuestas generadas: herramientas de contenido localizado para LATAM
+- Resultado: el motor genera un set completamente diferente de propuestas, confirmando que no hay resultados hardcodeados y que el cruce es dinámico y dependiente del perfil del usuario
