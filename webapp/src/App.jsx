@@ -758,9 +758,14 @@ function SolutionsEngineView({ setCurrentView }) {
 
                       <button 
                           onClick={async () => {
-                              // Borramos MVT anterior para demo, creamos el nuevo y redirigimos
-                              await supabase.from('mvt_evidence').delete().neq('validation_status', 'placeholder');
-                              await supabase.from('mvt_evidence').insert([{ proposal_id: p.proposal_id, validation_status: 'En Inmersión' }]);
+                              // Verificar si ya existe un registro MVT activo
+                              const { data: existing } = await supabase.from('mvt_evidence').select('mvt_id').neq('validation_status', 'placeholder').single();
+                              if (existing) {
+                                  // Solo actualizar la propuesta seleccionada, sin borrar datos
+                                  await supabase.from('mvt_evidence').update({ proposal_id: p.proposal_id }).eq('mvt_id', existing.mvt_id);
+                              } else {
+                                  await supabase.from('mvt_evidence').insert([{ proposal_id: p.proposal_id, validation_status: 'En Inmersión' }]);
+                              }
                               setCurrentView('MVT (Fase 5)');
                           }}
                           className="w-full py-3 bg-slate-800 hover:bg-cyan-600 text-white text-sm font-bold rounded-lg transition-colors border border-slate-700 hover:border-cyan-500"

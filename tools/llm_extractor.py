@@ -79,13 +79,11 @@ def run_extractor():
     model = get_gemini_model()
     
     print("Fetching videos from Supabase...")
-    videos_res = supabase.table("videos").select("video_id, title, transcript_text").execute()
+    videos_res = supabase.table("videos").select("video_id, title, transcript_text, business_model").execute()
     videos = videos_res.data
     
-    pps_res = supabase.table("latam_pain_points").select("pain_point_id").execute()
-    existing_pps = {row['pain_point_id'] for row in pps_res.data}
-    
-    videos_to_process = [v for v in videos if v['video_id'] not in existing_pps]
+    # Procesar videos que no tengan business_model extraído aún
+    videos_to_process = [v for v in videos if not v.get('business_model')]
     
     print(f"Found {len(videos_to_process)} videos to process for Pain Points.")
     
@@ -110,7 +108,7 @@ def run_extractor():
                 "target_market": pp_data["target_market"],
                 "severity_score": pp_data["severity_score"]
             }
-            supabase.table("latam_pain_points").insert(pp_entry).execute()
+            supabase.table("latam_pain_points").upsert(pp_entry).execute()
             
             # Update Video Table with extracted metadata
             video_update = {
