@@ -240,12 +240,62 @@ function PainPointsView() {
 
   const handleReclassify = async () => {
     setIsClassifying(true);
-    // Simulación de disparo de motor de re-clasificación
-    // En una app real, esto llamaría a un Edge Function o API Route
-    setTimeout(() => {
+    try {
+      // 1. Cargar pain points actuales
+      const { data: painPoints } = await supabase.from('latam_pain_points').select('category, description').limit(20);
+      // 2. Cargar videos con business_model pero sin pain_point_match
+      const { data: allVideos } = await supabase.from('videos').select('video_id, title, business_model, entrepreneur_action').not('business_model', 'is', null);
+      const videos = allVideos.filter(v => !v.pain_point_match);
+
+      if (!painPoints?.length || !videos?.length) {
+        alert('No hay videos pendientes de clasificar o no hay pain points disponibles.');
         setIsClassifying(false);
-        alert("Motor de Re-clasificación disparado. Los videos se están vinculando con los nuevos Pain Points en background.");
-    }, 2000);
+        return;
+      }
+
+      const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+      const ppList = painPoints.map(p => `- ${p.category}: ${p.description.slice(0, 100)}`).join('\n');
+
+      let processed = 0;
+      for (const video of videos.slice(0, 10)) {
+        const prompt = `Eres un clasificador de negocios LATAM.
+Video: ${video.title}
+Modelo de Negocio: ${video.business_model || 'N/A'}
+Acción del Emprendedor: ${video.entrepreneur_action || 'N/A'}
+Pain Points disponibles:
+${ppList}
+Devuelve SOLO un objeto JSON sin texto adicional:
+{"matched_pain_point": "nombre exacto de categoría", "relevance_score": número 0-100}`;
+
+        try {
+          const result = await model.generateContent(prompt);
+          const text = result.response.text();
+          const start = text.indexOf('{');
+          const end = text.lastIndexOf('}');
+          if (start !== -1 && end !== -1) {
+            const parsed = JSON.parse(text.slice(start, end + 1));
+            await supabase.from('videos').update({
+              pain_point_match: parsed.matched_pain_point,
+              relevance_score: parsed.relevance_score
+            }).eq('video_id', video.video_id);
+            processed++;
+          }
+        } catch (e) {
+          console.warn(`Error clasificando ${video.video_id}:`, e);
+        }
+      }
+
+      alert(`Re-clasificación completada. ${processed} videos actualizados.`);
+      // Recargar pain points para reflejar cambios
+      const { data: updated } = await supabase.from('latam_pain_points').select('*').order('severity_score', { ascending: false });
+      if (updated) setPoints(updated);
+    } catch (error) {
+      console.error('Error en re-clasificación:', error);
+      alert('Error al re-clasificar. Revisa la consola.');
+    } finally {
+      setIsClassifying(false);
+    }
   };
 
   return (
