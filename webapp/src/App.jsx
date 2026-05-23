@@ -244,7 +244,7 @@ function PainPointsView() {
       // 1. Cargar pain points actuales
       const { data: painPoints } = await supabase.from('latam_pain_points').select('category, description').limit(20);
       // 2. Cargar videos con business_model pero sin pain_point_match
-      const { data: allVideos } = await supabase.from('videos').select('video_id, title, business_model, entrepreneur_action').not('business_model', 'is', null);
+      const { data: allVideos } = await supabase.from('videos').select('video_id, title, business_model, entrepreneur_action, pain_point_match').not('business_model', 'is', null);
       const videos = allVideos.filter(v => !v.pain_point_match);
 
       if (!painPoints?.length || !videos?.length) {
