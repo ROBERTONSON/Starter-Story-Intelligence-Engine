@@ -32,7 +32,7 @@ def get_gemini_model():
         print("Missing GEMINI_API_KEY")
         sys.exit(1)
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel('gemini-2.5-flash')
+    return genai.GenerativeModel('gemini-1.5-flash')
 
 def extract_pain_point(model, video_title: str, transcript: str):
     prompt = f"""
