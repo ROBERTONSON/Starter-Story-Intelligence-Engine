@@ -22,14 +22,14 @@ def scrape_starter_story_with_apify():
     print("🚀 Iniciando extracción con Apify...")
     
     actor_id = "streamers/youtube-scraper"
-    TARGET_NEW_VIDEOS = 5  # Videos genuinamente nuevos que queremos guardar
+    TARGET_NEW_VIDEOS = 10  # Videos genuinamente nuevos que queremos guardar
 
     # Apuntar DIRECTAMENTE al canal oficial de Starter Story
     STARTER_STORY_CHANNEL = "https://www.youtube.com/@StarterStory/videos"
 
     run_input = {
         "startUrls": [{ "url": STARTER_STORY_CHANNEL }],
-        "maxResults": TARGET_NEW_VIDEOS * 4,
+        "maxResults": 40,  # Traer suficientes para encontrar videos más allá de los ya guardados
         "maxResultsShorts": 0
     }
 

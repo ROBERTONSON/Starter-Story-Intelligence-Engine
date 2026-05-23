@@ -105,3 +105,70 @@ El sistema está diseñado para ser completamente reactivo al perfil del usuario
 - Perfil RPM original: orientado a software B2B para PyMEs → propuestas generadas: herramientas SaaS de productividad
 - Perfil RPM modificado: orientado a contenido y marketing digital → propuestas generadas: herramientas de contenido localizado para LATAM
 - Resultado: el motor genera un set completamente diferente de propuestas, confirmando que no hay resultados hardcodeados y que el cruce es dinámico y dependiente del perfil del usuario
+
+---
+
+## Cómo levantar el proyecto localmente
+
+### Requisitos previos
+- Python 3.10+
+- Node.js 18+
+- Cuentas activas en: Supabase, Apify, Google AI Studio (Gemini)
+
+### 1. Clonar el repositorio
+```bash
+git clone https://github.com/ROBERTONSON/Starter-Story-Intelligence-Engine.git
+cd Starter-Story-Intelligence-Engine
+```
+
+### 2. Configurar variables de entorno del backend
+Crea un archivo `.env` en la raíz del proyecto basándote en `.env.example`:
+```
+SUPABASE_URL=tu_supabase_url
+SUPABASE_KEY=tu_supabase_anon_key
+GEMINI_API_KEY=tu_gemini_api_key
+APIFY_API_TOKEN=tu_apify_token
+```
+
+### 3. Instalar dependencias Python
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Inicializar la base de datos
+Ejecuta el schema SQL en el editor de Supabase:
+```
+tools/init_schema.sql
+tools/upgrade_schema.sql
+```
+
+### 5. Configurar variables de entorno del frontend
+Crea `webapp/.env.local` basándote en `webapp/.env.local.example`:
+```
+VITE_SUPABASE_URL=tu_supabase_url
+VITE_SUPABASE_ANON_KEY=tu_supabase_anon_key
+VITE_GEMINI_API_KEY=tu_gemini_api_key
+```
+
+### 6. Instalar dependencias y levantar el frontend
+```bash
+cd webapp
+npm install
+npm run dev
+```
+
+La app estará disponible en `http://localhost:5173`
+
+### 7. Ejecutar el pipeline de datos (orden recomendado)
+```bash
+# Extraer videos del canal Starter Story
+python tools/apify_scraper.py
+
+# Procesar transcripciones con IA (extrae business_model, revenue, entrepreneur_action)
+python tools/llm_extractor.py
+
+# Clasificar videos contra pain points LATAM
+python tools/video_classifier.py
+```
+
+> **Nota:** El pipeline usa la API gratuita de Gemini que tiene un límite de 20 requests/día. Si se alcanza el límite, espera 24 horas y vuelve a ejecutar.
