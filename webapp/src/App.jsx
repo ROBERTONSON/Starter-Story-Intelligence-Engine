@@ -245,7 +245,7 @@ function PainPointsView() {
       const { data: painPoints } = await supabase.from('latam_pain_points').select('category, description').limit(20);
       // 2. Cargar videos con business_model pero sin pain_point_match
       const { data: allVideos } = await supabase.from('videos').select('video_id, title, business_model, entrepreneur_action, pain_point_match').not('business_model', 'is', null);
-      const videos = allVideos.filter(v => !v.pain_point_match || v.pain_point_match.trim() === '');
+      const videos = (allVideos || []).filter(v => v.pain_point_match === null || v.pain_point_match === undefined || v.pain_point_match === '');
 
       if (!painPoints?.length || !videos?.length) {
         alert('No hay videos pendientes de clasificar o no hay pain points disponibles.');
@@ -254,7 +254,7 @@ function PainPointsView() {
       }
 
       const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
       const ppList = painPoints.map(p => `- ${p.category}: ${p.description.slice(0, 100)}`).join('\n');
 
       let processed = 0;
