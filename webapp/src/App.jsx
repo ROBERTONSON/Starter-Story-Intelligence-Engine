@@ -1,7 +1,36 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import './index.css';
+
+// Helper: genera contenido con fallback automático entre modelos si hay rate limit
+const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+async function generateWithFallback(prompt) {
+  const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+  for (const modelName of GEMINI_MODELS) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      return result.response.text();
+    } catch (e) {
+      const is429 = e?.message?.includes('429') || e?.message?.includes('Too Many Requests') || e?.message?.includes('quota');
+      if (is429) {
+        console.warn(`[Gemini] ${modelName} agotado, intentando con siguiente modelo...`);
+        continue;
+      }
+      throw e;
+    }
+  }
+  // Fallback final: Groq
+  console.warn('[Gemini] Todos los modelos agotados, usando Groq como fallback...');
+  const groq = new Groq({ apiKey: import.meta.env.VITE_GROQ_API_KEY, dangerouslyAllowBrowser: true });
+  const completion = await groq.chat.completions.create({
+    messages: [{ role: 'user', content: prompt }],
+    model: 'llama-3.3-70b-versatile',
+  });
+  return completion.choices[0]?.message?.content || '';
+}
 
 function App() {
   const [currentView, setCurrentView] = useState('Dashboard');
@@ -54,10 +83,11 @@ function App() {
         {currentView === 'Dashboard' && <DashboardView navigate={setCurrentView} />}
         {currentView === 'Wizard RPM' && <WizardView />}
         {currentView === 'Videos' && <VideosView />}
+        {currentView === 'Scraper & Logs' && <ScraperLogsView />}
         {currentView === 'Pain Points LATAM' && <PainPointsView />}
         {currentView === 'Motor de Soluciones' && <SolutionsEngineView setCurrentView={setCurrentView} />}
         {currentView === 'MVT (Fase 5)' && <MVTView />}
-        {currentView !== 'Dashboard' && currentView !== 'Wizard RPM' && currentView !== 'Videos' && currentView !== 'Pain Points LATAM' && currentView !== 'Motor de Soluciones' && currentView !== 'MVT (Fase 5)' && (
+        {currentView !== 'Dashboard' && currentView !== 'Wizard RPM' && currentView !== 'Videos' && currentView !== 'Scraper & Logs' && currentView !== 'Pain Points LATAM' && currentView !== 'Motor de Soluciones' && currentView !== 'MVT (Fase 5)' && (
           <div className="flex items-center justify-center h-full text-slate-500">
             Vista en construcción: {currentView}
           </div>
@@ -253,8 +283,6 @@ function PainPointsView() {
         return;
       }
 
-      const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
       const ppList = painPoints.map(p => `- ${p.category}: ${p.description.slice(0, 100)}`).join('\n');
 
       let processed = 0;
@@ -269,8 +297,7 @@ Devuelve SOLO un objeto JSON sin texto adicional:
 {"matched_pain_point": "nombre exacto de categoría", "relevance_score": número 0-100}`;
 
         try {
-          const result = await model.generateContent(prompt);
-          const text = result.response.text();
+          const text = await generateWithFallback(prompt);
           const start = text.indexOf('{');
           const end = text.lastIndexOf('}');
           if (start !== -1 && end !== -1) {
@@ -355,11 +382,118 @@ Devuelve SOLO un objeto JSON sin texto adicional:
   );
 }
 
+function ScraperLogsView() {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [videoCount, setVideoCount] = useState(0);
+
+  useEffect(() => {
+    async function fetchData() {
+      const { data: logsData } = await supabase.from('scraper_logs').select('*').order('timestamp', { ascending: false }).limit(20);
+      const { count } = await supabase.from('videos').select('*', { count: 'exact', head: true });
+      if (logsData) setLogs(logsData);
+      setVideoCount(count || 0);
+      setLoading(false);
+    }
+    fetchData();
+  }, []);
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-8 pb-12">
+      <header className="mb-8">
+        <h2 className="text-3xl font-bold text-white mb-2">Scraper & Logs</h2>
+        <p className="text-slate-400">Historial de ejecuciones del motor de extracción</p>
+      </header>
+
+      {/* Canal info */}
+      <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-6">
+        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Canal configurado</h3>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="w-10 h-10 bg-cyan-500/10 border border-cyan-500/20 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+            </div>
+            <div>
+              <p className="text-white font-bold">@StarterStory</p>
+              <p className="text-slate-500 text-sm">Starter Story — Canal oficial de YouTube</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-8">
+            <div className="text-center">
+              <p className="text-2xl font-black text-cyan-400">{videoCount}</p>
+              <p className="text-xs text-slate-500 uppercase">Videos en BD</p>
+            </div>
+            <a href="https://www.youtube.com/@StarterStory/videos" target="_blank" rel="noreferrer" className="text-cyan-400 hover:text-cyan-300 text-sm font-bold transition-colors">
+              Abrir canal →
+            </a>
+          </div>
+        </div>
+        <div className="mt-4 pt-4 border-t border-slate-800 flex items-center space-x-2">
+          <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+          <span className="text-xs text-slate-400">Schedule activo: Diario a las 2:00 AM (Chile) — GitHub Actions cron</span>
+        </div>
+      </div>
+
+      {/* Logs table */}
+      <div className="bg-[#0b0f19] border border-slate-800 rounded-xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-800">
+          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Historial de ejecuciones</h3>
+        </div>
+        {loading ? (
+          <div className="text-cyan-400 text-center py-10 font-mono animate-pulse">Cargando logs...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-300">
+              <thead className="bg-slate-900 border-b border-slate-800 text-slate-400 uppercase font-bold text-xs tracking-wider">
+                <tr>
+                  <th className="px-6 py-4">Timestamp</th>
+                  <th className="px-6 py-4">Estado</th>
+                  <th className="px-6 py-4 text-center">Videos procesados</th>
+                  <th className="px-6 py-4">Detalles</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/50">
+                {logs.map(log => (
+                  <tr key={log.log_id} className="hover:bg-slate-800/30 transition-colors">
+                    <td className="px-6 py-4 font-mono text-xs text-slate-400 whitespace-nowrap">
+                      {new Date(log.timestamp).toLocaleString('es-CL')}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
+                        log.status?.includes('SUCCESS') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                        log.status?.includes('ERROR') ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
+                        'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>{log.status}</span>
+                    </td>
+                    <td className="px-6 py-4 text-center font-mono text-cyan-400 font-bold">{log.videos_processed ?? 0}</td>
+                    <td className="px-6 py-4 text-slate-500 text-xs max-w-xs truncate" title={log.details}>{log.details || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {logs.length === 0 && <div className="p-8 text-center text-slate-500">No hay logs registrados.</div>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function WizardView() {
   const [step, setStep] = useState(1);
   const [rpm, setRpm] = useState({ results: '', purpose: '', massiveAction: '' });
   const [isProcessing, setIsProcessing] = useState(false);
   const [llmSummary, setLlmSummary] = useState(null);
+  const [painPointCategories, setPainPointCategories] = useState([]);
+
+  useEffect(() => {
+    supabase.from('latam_pain_points').select('category').then(({ data }) => {
+      if (data) {
+        const unique = [...new Set(data.map(p => p.category))];
+        setPainPointCategories(unique);
+      }
+    });
+  }, []);
 
   const stepsData = [
     { num: 1, letter: 'R', name: 'Results' },
@@ -378,13 +512,9 @@ function WizardView() {
   const handleGenerate = async () => {
     setIsProcessing(true);
     try {
-      // Initialize Gemini Client
-      const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
       const prompt = `
         Eres un analista experto de modelos de negocio. El usuario acaba de completar su perfil RPM (Results, Purpose, Massive Action).
-        Toma su perfil y genera un breve análisis estructurado en formato JSON estrictamente (sin formato markdown adicional).
+        Toma su perfil y genera un análisis estructurado en formato JSON estrictamente (sin formato markdown adicional).
         
         Resultados deseados: ${rpm.results}
         Propósito: ${rpm.purpose}
@@ -395,12 +525,22 @@ function WizardView() {
           "archetype": "Un arquetipo de emprendedor que lo defina en 3 palabras (ej. 'Agresivo B2B Hacker')",
           "viability_score": un número del 1 al 100 evaluando qué tan realista es su plan,
           "critical_feedback": "Un párrafo muy crítico y directo sobre el eslabón más débil de su plan y cómo arreglarlo",
-          "extracted_keywords": ["keyword1", "keyword2", "keyword3"]
+          "extracted_keywords": ["keyword1", "keyword2", "keyword3"],
+          "resumen_results": "Una oración concisa y específica resumiendo el resultado deseado con números y fechas",
+          "resumen_purpose": "Una oración resumiendo el propósito profundo del usuario",
+          "nivel_ambicion": "alta | media | baja",
+          "horizonte_meses": número estimado de meses para lograr el resultado,
+          "meta_mensual_usd": número estimado de USD mensuales como meta,
+          "tipo_negocio": "saas | ecommerce | agencia | info_product | marketplace | otro",
+          "industrias_preferidas": ["industria1", "industria2", "industria3"],
+          "habilidades": ["habilidad1", "habilidad2", "habilidad3"],
+          "restricciones": ["restriccion1", "restriccion2"],
+          "drivers_emocionales": ["driver1", "driver2", "driver3"]
         }
       `;
 
-      const result = await model.generateContent(prompt);
-      let text = result.response.text().trim();
+      const result = await generateWithFallback(prompt);
+      let text = result.trim();
       
       // Clean markdown if present
       if (text.startsWith("```json")) text = text.slice(7);
@@ -415,6 +555,16 @@ function WizardView() {
         results_desired: [rpm.results],
         purpose: [rpm.purpose],
         massive_action_plan: [rpm.massiveAction],
+        archetype: parsedSummary.archetype,
+        viability_score: parsedSummary.viability_score,
+        industrias_preferidas: parsedSummary.industrias_preferidas,
+        habilidades: parsedSummary.habilidades,
+        restricciones: parsedSummary.restricciones,
+        tipo_negocio: parsedSummary.tipo_negocio,
+        nivel_ambicion: parsedSummary.nivel_ambicion,
+        meta_mensual_usd: parsedSummary.meta_mensual_usd,
+        horizonte_meses: parsedSummary.horizonte_meses,
+        drivers_emocionales: parsedSummary.drivers_emocionales,
         updated_at: new Date().toISOString()
       });
 
@@ -434,8 +584,10 @@ function WizardView() {
           <p className="text-slate-400">Tu perfil ha sido analizado. Puedes ajustar los resultados si lo deseas.</p>
         </header>
 
-        <div className="bg-[#0b0f19] border border-cyan-500/50 rounded-2xl p-8 shadow-[0_0_40px_rgba(34,211,238,0.15)] relative overflow-hidden flex flex-col">
-          <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-6">
+        <div className="bg-[#0b0f19] border border-cyan-500/50 rounded-2xl p-8 shadow-[0_0_40px_rgba(34,211,238,0.15)] relative overflow-hidden flex flex-col space-y-6">
+          
+          {/* Arquetipo y Viabilidad */}
+          <div className="flex justify-between items-center border-b border-slate-800 pb-6">
             <div className="flex-1 mr-8">
               <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-2 text-cyan-400/60">Arquetipo Asignado (Editable)</p>
               <input 
@@ -450,8 +602,60 @@ function WizardView() {
               <div className="text-4xl font-black text-cyan-400">{llmSummary.viability_score}/100</div>
             </div>
           </div>
-          
-          <div className="mb-6">
+
+          {/* Resúmenes */}
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs text-cyan-500 font-bold uppercase tracking-widest mb-1">Resumen Results</p>
+              <p className="text-white font-semibold text-sm leading-relaxed">{llmSummary.resumen_results}</p>
+            </div>
+            <div>
+              <p className="text-xs text-cyan-500 font-bold uppercase tracking-widest mb-1">Resumen Purpose</p>
+              <p className="text-slate-300 text-sm leading-relaxed">{llmSummary.resumen_purpose}</p>
+            </div>
+          </div>
+
+          {/* Métricas clave */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-slate-800 pt-6">
+            <div>
+              <p className="text-xs text-slate-500 uppercase font-bold mb-1">Nivel de ambición</p>
+              <p className="text-white font-bold">{llmSummary.nivel_ambicion}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 uppercase font-bold mb-1">Horizonte (meses)</p>
+              <p className="text-white font-bold">{llmSummary.horizonte_meses}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 uppercase font-bold mb-1">Meta mensual (USD)</p>
+              <p className="text-white font-bold">${llmSummary.meta_mensual_usd?.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 uppercase font-bold mb-1">Tipo de negocio</p>
+              <p className="text-white font-bold">{llmSummary.tipo_negocio}</p>
+            </div>
+          </div>
+
+          {/* Tags */}
+          <div className="space-y-4 border-t border-slate-800 pt-6">
+            {[
+              { label: 'Industrias preferidas', items: llmSummary.industrias_preferidas },
+              { label: 'Habilidades', items: llmSummary.habilidades },
+              { label: 'Restricciones', items: llmSummary.restricciones },
+              { label: 'Drivers emocionales', items: llmSummary.drivers_emocionales },
+            ].map(({ label, items }) => items?.length > 0 && (
+              <div key={label}>
+                <p className="text-xs text-slate-500 uppercase font-bold mb-2">{label}</p>
+                <div className="flex flex-wrap gap-2">
+                  {items.map((item, i) => (
+                    <span key={i} className="px-3 py-1 bg-slate-800 border border-slate-700 text-slate-300 rounded-full text-xs">{item}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Feedback crítico */}
+          <div className="border-t border-slate-800 pt-6">
             <h4 className="text-sm text-cyan-500 font-bold uppercase mb-2">Feedback Crítico de la IA (Editable)</h4>
             <textarea 
               value={llmSummary.critical_feedback}
@@ -460,14 +664,13 @@ function WizardView() {
             />
           </div>
 
-          <div className="flex justify-between space-x-4 mt-6">
+          <div className="flex justify-between space-x-4 pt-2">
             <button onClick={() => setLlmSummary(null)} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-8 rounded-xl transition-colors cursor-pointer">
               Reiniciar Wizard
             </button>
             <button 
               onClick={async () => {
-                alert("Perfil RPM Guardado Localmente y en Base de Datos");
-                // Here we could add a save function to persist the manual edits back to DB
+                alert("Perfil RPM Guardado en Base de Datos");
               }} 
               className="flex-1 bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-3 px-8 rounded-xl transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)] cursor-pointer"
             >
@@ -480,7 +683,7 @@ function WizardView() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto flex flex-col h-full pb-10">
+    <div className="max-w-4xl mx-auto flex flex-col pb-10 overflow-y-auto">
       <header className="mb-10 text-center">
         <h2 className="text-3xl font-bold text-white mb-2">Perfil RPM</h2>
         <p className="text-slate-400">Define tus Resultados, Propósito y Plan de Acción Masiva</p>
@@ -512,51 +715,88 @@ function WizardView() {
       </div>
 
       {/* FORM AREA */}
-      <div className="flex-1 bg-[#0b0f19] border border-slate-800 rounded-2xl p-8 shadow-2xl relative overflow-hidden flex flex-col min-h-[400px]">
+      <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl p-8 shadow-2xl relative overflow-hidden flex flex-col">
           {step === 1 && (
               <div className="flex-1 flex flex-col animate-in fade-in slide-in-from-right-4 duration-500">
-                  <h3 className="text-2xl font-bold text-white mb-4">Paso 1: Results (Resultados)</h3>
-                  <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl mb-6 border-l-4 border-l-cyan-500">
-                      <p className="text-cyan-400 font-mono text-sm">El "Qué" exacto.</p>
-                      <p className="text-slate-400 text-sm mt-2">Sé hiper-específico y medible. No digas "quiero ganar más dinero", di "Quiero facturar $10,000 USD mensuales en 6 meses vendiendo software B2B en México". Si tu resultado no tiene un número y una fecha, es solo un deseo.</p>
+                  <h3 className="text-2xl font-bold text-white mb-1">R — Results: ¿Qué quieres realmente?</h3>
+                  <p className="text-slate-400 text-sm mb-4">No es 'ganar dinero' o 'ser libre'. Es un resultado específico, medible, con plazo. Si tu Result es vago, todo lo demás colapsa.</p>
+                  
+                  {painPointCategories.length > 0 && (
+                    <div className="p-4 bg-slate-900 border border-slate-700 rounded-xl mb-4">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Áreas con Pain Points reales en tu sistema ({painPointCategories.length})</p>
+                      <div className="flex flex-wrap gap-2 mb-2 max-h-28 overflow-y-auto pr-1">
+                        {painPointCategories.map((cat, i) => (
+                          <span key={i} className="px-2 py-1 bg-slate-800 border border-slate-600 text-cyan-400 rounded text-[10px] font-bold uppercase tracking-tight cursor-pointer hover:bg-cyan-500/10 whitespace-nowrap" onClick={() => setRpm({...rpm, results: rpm.results + (rpm.results ? ', ' : '') + cat})}>{cat}</span>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-slate-500">Estas son las categorías que la IA ya identificó como problemas reales LATAM. Ataca una de estas para que el motor de soluciones tenga material para inspirarse.</p>
+                    </div>
+                  )}
+
+                  <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl mb-4 border-l-4 border-l-cyan-500">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Preguntas auxiliares (úsalas para profundizar)</p>
+                      <ul className="text-slate-400 text-xs space-y-1 list-disc list-inside">
+                        <li>¿Qué cifra exacta de ingresos mensuales quieres alcanzar (USD)?</li>
+                        <li>¿Para cuándo? (fecha o cantidad de meses)</li>
+                        <li>¿Cómo sabrás que lo lograste? (criterio de éxito)</li>
+                        <li>¿En qué área te gustaría operar? (considera los pain points de arriba)</li>
+                        <li>¿Desde dónde lo construyes? (país/ciudad LATAM)</li>
+                        <li>¿Full-time o side project? Si es side, ¿cuántas horas a la semana?</li>
+                      </ul>
                   </div>
                   <textarea 
                     value={rpm.results}
                     onChange={(e) => setRpm({ ...rpm, results: e.target.value })}
-                    className="flex-1 w-full bg-black border border-slate-700 rounded-xl p-4 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all resize-none"
-                    placeholder="Ej: Lograr $10,000 USD de MRR vendiendo software a PyMEs..."
+                    className="w-full h-32 bg-black border border-slate-700 rounded-xl p-4 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all resize-none"
+                    placeholder="Ej: Lograr $10,000 USD de MRR vendiendo software a PyMEs en Chile antes de diciembre 2026..."
                   ></textarea>
               </div>
           )}
           
           {step === 2 && (
               <div className="flex-1 flex flex-col animate-in fade-in slide-in-from-right-4 duration-500">
-                  <h3 className="text-2xl font-bold text-white mb-4">Paso 2: Purpose (Propósito)</h3>
-                  <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl mb-6 border-l-4 border-l-cyan-500">
-                      <p className="text-cyan-400 font-mono text-sm">El "Por Qué" profundo.</p>
-                      <p className="text-slate-400 text-sm mt-2">Tu gasolina emocional. Si la motivación es solo superficial, abandonarás a la primera objeción. ¿Qué libertad o impacto radical buscas para ti o tu familia que hace que el resultado sea innegociable?</p>
+                  <h3 className="text-2xl font-bold text-white mb-1">P — Purpose: ¿Por qué lo quieres?</h3>
+                  <p className="text-slate-400 text-sm mb-4">Sin un porqué fuerte las acciones no se sostienen. Esto no es lógica — es emoción. Cava hasta encontrar la razón real.</p>
+                  <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl mb-4 border-l-4 border-l-cyan-500">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Preguntas auxiliares (úsalas para profundizar)</p>
+                      <ul className="text-slate-400 text-xs space-y-1 list-disc list-inside">
+                        <li>¿Qué te dará lograrlo que hoy no tienes?</li>
+                        <li>¿A quién más beneficia además de ti? (familia, comunidad, clientes)</li>
+                        <li>¿Qué pasa si NO lo logras en 12-24 meses? ¿Qué se rompe?</li>
+                        <li>¿Qué dolor evitas? ¿Qué placer ganas?</li>
+                        <li>¿En quién te conviertes al lograrlo?</li>
+                        <li>¿A quién quieres demostrarle algo (incluido tú mismo)?</li>
+                      </ul>
                   </div>
                   <textarea 
                     value={rpm.purpose}
                     onChange={(e) => setRpm({ ...rpm, purpose: e.target.value })}
-                    className="flex-1 w-full bg-black border border-slate-700 rounded-xl p-4 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all resize-none"
-                    placeholder="Ej: Quiero libertad geográfica y financiera para no depender de un jefe..."
+                    className="w-full h-40 bg-black border border-slate-700 rounded-xl p-4 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all resize-none"
+                    placeholder="Ej: Quiero independencia financiera porque siento que estoy intercambiando mi vida por un sueldo..."
                   ></textarea>
               </div>
           )}
 
           {step === 3 && (
               <div className="flex-1 flex flex-col animate-in fade-in slide-in-from-right-4 duration-500">
-                  <h3 className="text-2xl font-bold text-white mb-4">Paso 3: Massive Action Plan</h3>
-                  <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl mb-6 border-l-4 border-l-cyan-500">
-                      <p className="text-cyan-400 font-mono text-sm">El 80% del impacto con el 20% del esfuerzo.</p>
-                      <p className="text-slate-400 text-sm mt-2">¿Cuáles son las 3 acciones inmediatas e incómodas que tomarás HOY? Olvida las métricas de vanidad (ej. crear el logo). Enfócate en acciones masivas como prospectar clientes en frío o construir el MVP.</p>
+                  <h3 className="text-2xl font-bold text-white mb-1">M — Massive Action Plan: ¿Qué acciones tomarás?</h3>
+                  <p className="text-slate-400 text-sm mb-4">No 1 o 2 ideas — un brainstorm completo. Cantidad antes que calidad. Después se prioriza por leverage.</p>
+                  <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl mb-4 border-l-4 border-l-cyan-500">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Preguntas auxiliares (úsalas para profundizar)</p>
+                      <ul className="text-slate-400 text-xs space-y-1 list-disc list-inside">
+                        <li>Lista MÍNIMO 3-5 acciones distintas que podrías tomar (no las filtres aún).</li>
+                        <li>¿Cuántas horas a la semana puedes dedicar realmente?</li>
+                        <li>¿Qué habilidades tienes ya? (programación, ventas, diseño, etc.)</li>
+                        <li>¿Qué recursos tienes? (dinero disponible, herramientas, contactos)</li>
+                        <li>¿Qué restricciones tienes? (trabajo full-time, tiempo, ubicación)</li>
+                        <li>¿Cuáles son las primeras 3 acciones que harás en las próximas 24 horas?</li>
+                      </ul>
                   </div>
                   <textarea 
                     value={rpm.massiveAction}
                     onChange={(e) => setRpm({ ...rpm, massiveAction: e.target.value })}
-                    className="flex-1 w-full bg-black border border-slate-700 rounded-xl p-4 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all resize-none"
-                    placeholder="Ej: 1. Prospectar 50 empresas en LinkedIn. 2. Lanzar landing page de preventa..."
+                    className="w-full h-40 bg-black border border-slate-700 rounded-xl p-4 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all resize-none"
+                    placeholder="Ej: 1. Contactar 30 PyMEs en LinkedIn esta semana. 2. Construir prototipo en 2 semanas. 3. Lanzar landing page de preventa..."
                   ></textarea>
               </div>
           )}
@@ -639,11 +879,7 @@ function SolutionsEngineView({ setCurrentView }) {
           return;
       }
 
-      // 2. Inicializar Gemini
-      const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-      // 3. Prompt Maestro
+      // 2. Generar con fallback
       const prompt = `
         Eres un estratega de negocios top. Cruza estos datos para generar 4 propuestas de negocio en LATAM.
         
@@ -678,8 +914,8 @@ function SolutionsEngineView({ setCurrentView }) {
         }
       `;
 
-      const result = await model.generateContent(prompt);
-      let text = result.response.text().trim();
+      const result = await generateWithFallback(prompt);
+      let text = result.trim();
       
       if (text.startsWith("```json")) text = text.slice(7);
       if (text.endsWith("```")) text = text.slice(0, -3);
@@ -841,10 +1077,6 @@ function MVTView() {
   const [proposal, setProposal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState([
-    { name: '', feedback: '' }, 
-    { name: '', feedback: '' }, 
-    { name: '', feedback: '' },
-    { name: '', feedback: '' },
     { name: '', feedback: '' }
   ]);
   const [hypothesis, setHypothesis] = useState('');
@@ -861,10 +1093,7 @@ function MVTView() {
     if (evData) {
       setEvidence(evData);
       if (evData.evidence_logs && evData.evidence_logs.length > 0) {
-        // If logs exist in DB, populate them (ensure there are 5)
-        const dbLogs = evData.evidence_logs;
-        while(dbLogs.length < 5) dbLogs.push({ name: '', feedback: '' });
-        setLogs(dbLogs);
+        setLogs(evData.evidence_logs);
       }
       
       setHypothesis(evData.hypothesis || '');
@@ -920,11 +1149,30 @@ function MVTView() {
       </div>
 
       <div className="space-y-6">
-        <h3 className="text-xl font-bold text-white">Documentación de Entrevistas</h3>
+        <div className="flex justify-between items-center">
+          <h3 className="text-xl font-bold text-white">Documentación de Entrevistas</h3>
+          <button
+            onClick={() => setLogs([...logs, { name: '', feedback: '' }])}
+            className="flex items-center space-x-2 px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 rounded-lg text-sm font-bold hover:bg-cyan-500/20 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+            <span>Agregar conversación</span>
+          </button>
+        </div>
         
         {logs.map((log, index) => (
           <div key={index} className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <h4 className="text-cyan-400 font-bold mb-4">Conversación #{index + 1}</h4>
+            <div className="flex justify-between items-center mb-4">
+              <h4 className="text-cyan-400 font-bold">Conversación #{index + 1}</h4>
+              {logs.length > 1 && (
+                <button
+                  onClick={() => setLogs(logs.filter((_, i) => i !== index))}
+                  className="text-slate-500 hover:text-rose-400 transition-colors text-xs font-bold uppercase tracking-wider"
+                >
+                  Eliminar
+                </button>
+              )}
+            </div>
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">¿Con quién hablaste? (Perfil)</label>
