@@ -556,15 +556,15 @@ function WizardView() {
         purpose: [rpm.purpose],
         massive_action_plan: [rpm.massiveAction],
         archetype: parsedSummary.archetype,
-        viability_score: parsedSummary.viability_score,
-        industrias_preferidas: parsedSummary.industrias_preferidas,
-        habilidades: parsedSummary.habilidades,
-        restricciones: parsedSummary.restricciones,
+        viability_score: parseInt(parsedSummary.viability_score) || 0,
+        industrias_preferidas: parsedSummary.industrias_preferidas || [],
+        habilidades: parsedSummary.habilidades || [],
+        restricciones: parsedSummary.restricciones || [],
         tipo_negocio: parsedSummary.tipo_negocio,
         nivel_ambicion: parsedSummary.nivel_ambicion,
-        meta_mensual_usd: parsedSummary.meta_mensual_usd,
-        horizonte_meses: parsedSummary.horizonte_meses,
-        drivers_emocionales: parsedSummary.drivers_emocionales,
+        meta_mensual_usd: parseInt(parsedSummary.meta_mensual_usd) || 0,
+        horizonte_meses: parseInt(parsedSummary.horizonte_meses) || 0,
+        drivers_emocionales: parsedSummary.drivers_emocionales || [],
         updated_at: new Date().toISOString()
       });
 
@@ -578,7 +578,7 @@ function WizardView() {
 
   if (llmSummary) {
     return (
-      <div className="max-w-4xl mx-auto flex flex-col h-full pb-10 animate-in fade-in zoom-in duration-500">
+      <div className="max-w-4xl mx-auto flex flex-col pb-10 animate-in fade-in zoom-in duration-500">
         <header className="mb-10 text-center">
           <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 mb-2">Evaluación IA Completada</h2>
           <p className="text-slate-400">Tu perfil ha sido analizado. Puedes ajustar los resultados si lo deseas.</p>
