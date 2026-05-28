@@ -514,9 +514,9 @@ function WizardView() {
           drivers_emocionales: data.drivers_emocionales || [],
         });
         setRpm({
-          results: data.results_desired?.[0] || '',
-          purpose: data.purpose?.[0] || '',
-          massiveAction: data.massive_action_plan?.[0] || '',
+          results: '',
+          purpose: '',
+          massiveAction: '',
         });
       }
     });
@@ -584,6 +584,7 @@ function WizardView() {
         massive_action_plan: [rpm.massiveAction],
         archetype: parsedSummary.archetype,
         viability_score: parseInt(parsedSummary.viability_score) || 0,
+        critical_feedback: parsedSummary.critical_feedback,
         industrias_preferidas: parsedSummary.industrias_preferidas || [],
         habilidades: parsedSummary.habilidades || [],
         restricciones: parsedSummary.restricciones || [],
