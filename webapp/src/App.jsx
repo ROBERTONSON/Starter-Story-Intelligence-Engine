@@ -34,6 +34,7 @@ async function generateWithFallback(prompt) {
 
 function App() {
   const [currentView, setCurrentView] = useState('Dashboard');
+  const [selectedProposalId, setSelectedProposalId] = useState(null);
 
   return (
     <div className="flex h-screen bg-black text-slate-200 font-sans overflow-hidden">
@@ -85,8 +86,8 @@ function App() {
         {currentView === 'Videos' && <VideosView />}
         {currentView === 'Scraper & Logs' && <ScraperLogsView />}
         {currentView === 'Pain Points LATAM' && <PainPointsView />}
-        {currentView === 'Motor de Soluciones' && <SolutionsEngineView setCurrentView={setCurrentView} />}
-        {currentView === 'MVT (Fase 5)' && <MVTView />}
+        {currentView === 'Motor de Soluciones' && <SolutionsEngineView setCurrentView={setCurrentView} setSelectedProposalId={setSelectedProposalId} />}
+        {currentView === 'MVT (Fase 5)' && <MVTView proposalId={selectedProposalId} />}
         {currentView !== 'Dashboard' && currentView !== 'Wizard RPM' && currentView !== 'Videos' && currentView !== 'Scraper & Logs' && currentView !== 'Pain Points LATAM' && currentView !== 'Motor de Soluciones' && currentView !== 'MVT (Fase 5)' && (
           <div className="flex items-center justify-center h-full text-slate-500">
             Vista en construcción: {currentView}
@@ -839,7 +840,7 @@ function WizardView() {
   );
 }
 
-function SolutionsEngineView({ setCurrentView }) {
+function SolutionsEngineView({ setCurrentView, setSelectedProposalId }) {
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -1044,14 +1045,13 @@ function SolutionsEngineView({ setCurrentView }) {
 
                       <button 
                           onClick={async () => {
-                              // Verificar si ya existe un registro MVT activo
-                              const { data: existing } = await supabase.from('mvt_evidence').select('mvt_id').neq('validation_status', 'placeholder').single();
-                              if (existing) {
-                                  // Solo actualizar la propuesta seleccionada, sin borrar datos
-                                  await supabase.from('mvt_evidence').update({ proposal_id: p.proposal_id }).eq('mvt_id', existing.mvt_id);
-                              } else {
+                              // Buscar si ya existe un registro MVT para ESTA propuesta específica
+                              const { data: existing } = await supabase.from('mvt_evidence').select('mvt_id').eq('proposal_id', p.proposal_id).single();
+                              if (!existing) {
+                                  // Crear nuevo registro solo si no existe para esta propuesta
                                   await supabase.from('mvt_evidence').insert([{ proposal_id: p.proposal_id, validation_status: 'En Inmersión' }]);
                               }
+                              setSelectedProposalId(p.proposal_id);
                               setCurrentView('MVT (Fase 5)');
                           }}
                           className="w-full py-3 bg-slate-800 hover:bg-cyan-600 text-white text-sm font-bold rounded-lg transition-colors border border-slate-700 hover:border-cyan-500"
@@ -1072,7 +1072,7 @@ function SolutionsEngineView({ setCurrentView }) {
   );
 }
 
-function MVTView() {
+function MVTView({ proposalId }) {
   const [evidence, setEvidence] = useState(null);
   const [proposal, setProposal] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1085,17 +1085,23 @@ function MVTView() {
 
   useEffect(() => {
     fetchMVT();
-  }, []);
+  }, [proposalId]);
 
   async function fetchMVT() {
     setLoading(true);
-    const { data: evData } = await supabase.from('mvt_evidence').select('*').neq('validation_status', 'placeholder').single();
+    // Cargar el registro MVT de la propuesta específica seleccionada
+    const query = proposalId
+      ? supabase.from('mvt_evidence').select('*').eq('proposal_id', proposalId).single()
+      : supabase.from('mvt_evidence').select('*').neq('validation_status', 'placeholder').order('updated_at', { ascending: false }).limit(1).single();
+    
+    const { data: evData } = await query;
     if (evData) {
       setEvidence(evData);
       if (evData.evidence_logs && evData.evidence_logs.length > 0) {
         setLogs(evData.evidence_logs);
+      } else {
+        setLogs([{ name: '', feedback: '' }]);
       }
-      
       setHypothesis(evData.hypothesis || '');
       setTestDesign(evData.test_design || '');
       setAnalysisResult(evData.analysis_result || '');
