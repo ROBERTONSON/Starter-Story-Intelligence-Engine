@@ -486,12 +486,38 @@ function WizardView() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [llmSummary, setLlmSummary] = useState(null);
   const [painPointCategories, setPainPointCategories] = useState([]);
+  const [savedProfile, setSavedProfile] = useState(null);
 
   useEffect(() => {
     supabase.from('latam_pain_points').select('category').then(({ data }) => {
       if (data) {
         const unique = [...new Set(data.map(p => p.category))];
         setPainPointCategories(unique);
+      }
+    });
+    // Cargar perfil RPM guardado si existe
+    supabase.from('users_rpm').select('*').eq('user_id', 'dev_user').single().then(({ data }) => {
+      if (data && data.archetype) {
+        setSavedProfile({
+          archetype: data.archetype,
+          viability_score: data.viability_score,
+          critical_feedback: data.critical_feedback || '',
+          resumen_results: data.results_desired?.[0] || '',
+          resumen_purpose: data.purpose?.[0] || '',
+          nivel_ambicion: data.nivel_ambicion,
+          horizonte_meses: data.horizonte_meses,
+          meta_mensual_usd: data.meta_mensual_usd,
+          tipo_negocio: data.tipo_negocio,
+          industrias_preferidas: data.industrias_preferidas || [],
+          habilidades: data.habilidades || [],
+          restricciones: data.restricciones || [],
+          drivers_emocionales: data.drivers_emocionales || [],
+        });
+        setRpm({
+          results: data.results_desired?.[0] || '',
+          purpose: data.purpose?.[0] || '',
+          massiveAction: data.massive_action_plan?.[0] || '',
+        });
       }
     });
   }, []);
@@ -689,6 +715,21 @@ function WizardView() {
         <h2 className="text-3xl font-bold text-white mb-2">Perfil RPM</h2>
         <p className="text-slate-400">Define tus Resultados, Propósito y Plan de Acción Masiva</p>
       </header>
+
+      {savedProfile && !llmSummary && (
+        <div className="mb-6 p-4 bg-cyan-500/10 border border-cyan-500/30 rounded-xl flex justify-between items-center">
+          <div>
+            <p className="text-cyan-400 font-bold text-sm">Tienes un perfil guardado</p>
+            <p className="text-slate-400 text-xs mt-1">Arquetipo: {savedProfile.archetype} · Viabilidad: {savedProfile.viability_score}/100</p>
+          </div>
+          <button
+            onClick={() => setLlmSummary(savedProfile)}
+            className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black text-sm font-bold rounded-lg transition-colors"
+          >
+            Ver perfil guardado
+          </button>
+        </div>
+      )}
 
       {/* WIZARD STEPS */}
       <div className="flex justify-center items-center mb-12 relative w-full max-w-md mx-auto">
